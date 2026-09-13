@@ -1,14 +1,42 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>LuxuryStore_Backend</RootNamespace>
+    <UserSecretsId>7f8c5f2d-258a-40a9-823c-68dfd020e44a</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <!-- Test UI for the OpenAPI document Microsoft.AspNetCore.OpenApi already
+         generates. .NET 10's template dropped Swagger UI by default (that's
+         Swashbuckle, which the Microsoft docs steer people away from as of
+         .NET 9+) — Scalar is the current recommended replacement and its UI
+         matches the project's dark/minimalist visual identity. -->
+    <PackageReference Include="Scalar.AspNetCore" Version="2.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LuxuryStore.Application\LuxuryStore.Application.csproj" />
+    <ProjectReference Include="..\LuxuryStore.Infrastructure\LuxuryStore.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The EF Core CLI tools (dotnet ef migrations/database update) resolve
+         design-time services by walking the STARTUP project's own direct
+         package references — they don't follow ProjectReferences into
+         Infrastructure to find it there, even though that's where
+         AppDbContext actually lives. Infrastructure's copy is marked
+         PrivateAssets="all" too, so it doesn't flow up transitively either.
+         Net result: this package has to be referenced directly in both
+         places. Same version and asset restriction as Infrastructure's, so
+         none of this tooling ships in the published API output. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
 </Project>
