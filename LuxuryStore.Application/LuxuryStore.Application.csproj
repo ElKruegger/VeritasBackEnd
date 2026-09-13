@@ -15,8 +15,17 @@
     <!-- Only needed so DependencyInjection.cs can extend IServiceCollection.
          This project otherwise has zero framework/infrastructure dependencies
          on purpose — business rules shouldn't need to know EF Core or ASP.NET
-         Core exist. -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+         Core exist. Pinned to match Microsoft.Extensions.Identity.Core below,
+         which pulls Microsoft.Extensions.Options 10.0.12 -> this package
+         at >= 10.0.12 — a lower exact pin here is a package downgrade
+         (NU1605, a build error since .NET 8's SDK). Floating (>=) rather
+         than exact, so a future patch bump elsewhere doesn't reopen this. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[10.0.12,)" />
+    <!-- IPasswordHasher<TUser>/PasswordHasher<TUser> only — the standalone
+         hashing primitive, not the rest of ASP.NET Core Identity (no
+         UserManager, no IdentityDbContext). AuthService depends on the
+         interface; DependencyInjection.cs registers the concrete class. -->
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.12" />
   </ItemGroup>
 
 </Project>

@@ -13,3 +13,13 @@ public class NotFoundException(string message) : Exception(message);
 /// a 409 response by the API's global exception handler.
 /// </summary>
 public class ConflictException(string message) : Exception(message);
+
+/// <summary>
+/// Thrown for a failed authentication attempt (bad credentials, invalid or
+/// expired refresh token) or a deactivated account. Mapped to a 401
+/// response by the API's global exception handler. Deliberately generic
+/// messages at the call site (AuthService) — "invalid email or password",
+/// never "no account with that email" — so this never becomes a way to
+/// enumerate which emails are registered.
+/// </summary>
+public class UnauthorizedException(string message) : Exception(message);

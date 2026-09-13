@@ -1,6 +1,7 @@
 using LuxuryStore.Application.Interfaces;
 using LuxuryStore.Infrastructure.Persistence;
 using LuxuryStore.Infrastructure.Repositories;
+using LuxuryStore.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +43,11 @@ public static class DependencyInjection
         //     Transient would break both and Brands/Categories/Products
         //     would stop sharing a transaction.
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        // Stateless (reads IConfiguration per call, no mutable state), so
+        // Scoped vs Singleton makes no real difference — Scoped chosen only
+        // to stay consistent with everything else this layer registers.
+        services.AddScoped<ITokenService, TokenService>();
 
         return services;
     }

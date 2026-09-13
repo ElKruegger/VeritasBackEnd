@@ -16,6 +16,19 @@
          .NET 9+) — Scalar is the current recommended replacement and its UI
          matches the project's dark/minimalist visual identity. -->
     <PackageReference Include="Scalar.AspNetCore" Version="2.9.0" />
+    <!-- Configures the JWT Bearer *validation* middleware in Program.cs
+         (AddAuthentication().AddJwtBearer(...)). LuxuryStore.Infrastructure
+         references the same package separately, to *issue* tokens in
+         TokenService — different concern, different project. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <!-- Structured logging (brief section 3). AspNetCore brings
+         Serilog.Extensions.Hosting (UseSerilog) and a console sink;
+         Settings.Configuration adds ReadFrom.Configuration so the "Serilog"
+         section in appsettings.json/appsettings.Development.json drives
+         minimum levels without a code change per environment. -->
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
   </ItemGroup>
 
   <ItemGroup>

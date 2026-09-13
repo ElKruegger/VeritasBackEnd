@@ -46,6 +46,17 @@ public interface IProductRepository : IGenericRepository<Product>
     void RemoveVariant(ProductVariant variant);
 }
 
+public interface IUserRepository : IGenericRepository<User>
+{
+    Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
+    Task<bool> EmailExistsAsync(string email, Guid? excludeId = null, CancellationToken cancellationToken = default);
+}
+
+public interface IRefreshTokenRepository : IGenericRepository<RefreshToken>
+{
+    Task<RefreshToken?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Coordinates repositories that share one DbContext/transaction. Services
 /// call repository methods to stage changes in memory, then call
@@ -59,6 +70,8 @@ public interface IUnitOfWork : IDisposable
     IBrandRepository Brands { get; }
     ICategoryRepository Categories { get; }
     IProductRepository Products { get; }
+    IUserRepository Users { get; }
+    IRefreshTokenRepository RefreshTokens { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
