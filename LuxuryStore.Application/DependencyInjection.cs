@@ -1,5 +1,7 @@
 using LuxuryStore.Application.Interfaces;
 using LuxuryStore.Application.Services;
+using LuxuryStore.Domain.Entities;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LuxuryStore.Application;
@@ -25,6 +27,16 @@ public static class DependencyInjection
         services.AddScoped<IBrandService, BrandService>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IAuthService, AuthService>();
+
+        // ASP.NET Core Identity's password hasher used standalone — PBKDF2
+        // under the hood, salted per-password automatically — without
+        // pulling in the rest of Identity (UserManager/SignInManager/
+        // IdentityDbContext), which would mean rebuilding this project's
+        // existing IUnitOfWork/repository pattern around Identity's own
+        // store abstractions instead. Stateless and thread-safe, so
+        // Singleton is correct (and avoids reallocating it every request).
+        services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
         return services;
     }
