@@ -1,0 +1,51 @@
+## Visual Studio / Rider user files
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.DotSettings.user
+.vs/
+.idea/
+
+## Build results
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Xx]64/
+[Xx]86/
+out/
+
+## NuGet
+*.nupkg
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+packages/
+
+## Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+## VS Code
+.vscode/
+
+## OS files
+.DS_Store
+Thumbs.db
+
+## Logs
+*.log
+logs/
+
+## Secrets / local env — nunca commitar
+*.pfx
+*.pem
+.env
+.env.*
+secrets.json
+appsettings.Local.json
+appsettings.*.local.json
