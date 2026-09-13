@@ -21,19 +21,35 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <!-- Pinned as a floating minimum (>= 10.0.4), not an exact version: EF Core
-         Design pulls Microsoft.Extensions.Caching.Memory 10.0.4, which itself
-         requires these two at >= 10.0.4. Pinning them lower than that is a
-         package downgrade (NU1605, treated as a build error by the SDK).
-         Floating instead of an exact "10.0.4" means a future patch bump
-         elsewhere in the chain won't trigger this same conflict again. -->
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="[10.0.4,)" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[10.0.4,)" />
+    <!-- Pinned as a floating minimum, not an exact version — the floor keeps
+         creeping up as other packages in the graph pull newer ones in, and
+         a floating range absorbs the next bump automatically instead of
+         needing a fresh pin every time. History so far: EF Core Design
+         originally forced >= 10.0.4 (via Microsoft.Extensions.Caching.Memory).
+         Adding Microsoft.Extensions.Identity.Core 10.0.12 to
+         LuxuryStore.Application (Options -> DI.Abstractions, Diagnostics ->
+         Configuration.Abstractions, both at >= 10.0.12) forced today's floor
+         to 10.0.12 — a lower pin here is a package downgrade (NU1605,
+         a build error by default since .NET 8's SDK, not just a warning).
+         If this fires again: the error message names the exact chain and
+         version that needs raising — bump the floor here to match, don't
+         just delete the pin, or the *next* restore fails with the same
+         error for a different reason. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="[10.0.12,)" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[10.0.12,)" />
     <!-- Forces the patched version — 9.0.0 (a transitive dependency somewhere
          in this chain) is affected by CVE-2026-50648 (GHSA-23rf-6693-g89p, a
          high-severity DoS via crafted encrypted XML). Patched in the 10.0.x
          line as of 10.0.10. -->
     <PackageReference Include="System.Security.Cryptography.Xml" Version="[10.0.10,)" />
+    <!-- TokenService only uses this for JwtSecurityToken/JwtSecurityTokenHandler
+         (a transitive dependency of this package, System.IdentityModel.Tokens.Jwt)
+         and SigningCredentials/SymmetricSecurityKey (Microsoft.IdentityModel.Tokens,
+         also transitive) — issuing tokens is Infrastructure's job the same way
+         talking to Postgres is. The API project references the same package
+         separately, to configure the JwtBearer *validation* middleware in
+         Program.cs; that's a different concern living in a different project. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
   </ItemGroup>
 
 </Project>

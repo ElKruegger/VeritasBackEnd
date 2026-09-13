@@ -23,11 +23,12 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
         {
             NotFoundException => (StatusCodes.Status404NotFound, "Resource not found"),
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
+            UnauthorizedException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
         };
 
         // Only log the exception itself for the cases we didn't anticipate —
-        // a 404/409 from a NotFoundException/ConflictException is expected
+        // a 404/409/401 from one of our own exception types is expected
         // application flow, not something that needs an error-level log entry.
         if (statusCode == StatusCodes.Status500InternalServerError)
             logger.LogError(exception, "Unhandled exception processing {Method} {Path}",
@@ -40,7 +41,7 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
             Status = statusCode,
             Title = title,
             // Never leak internal exception details for a 500 — do surface
-            // the message for the exceptions we threw on purpose (404/409),
+            // the message for the exceptions we threw on purpose (404/409/401),
             // since that message is written for the API consumer to read.
             Detail = statusCode == StatusCodes.Status500InternalServerError
                 ? "An unexpected error occurred. Please try again later."
