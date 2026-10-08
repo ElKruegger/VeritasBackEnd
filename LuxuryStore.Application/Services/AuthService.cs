@@ -58,8 +58,22 @@ public class AuthService(
         var existing = await unitOfWork.RefreshTokens.GetByTokenHashAsync(tokenHash, cancellationToken)
             ?? throw new UnauthorizedException("Invalid refresh token.");
 
+        // Reuse detection: a token that was already rotated (RevokedAt set)
+        // should never come back — the legitimate client threw it away when
+        // it received the replacement. Seeing it again means either it was
+        // stolen or something is replaying it, and we can't tell which copy
+        // is the attacker's, so every live session of that user is killed
+        // and they have to log in again. The frontend must therefore never
+        // fire two /auth/refresh calls in parallel (single-flight the refresh),
+        // or the second one would trip this on perfectly honest traffic.
+        if (existing.RevokedAt is not null)
+        {
+            await unitOfWork.RefreshTokens.RevokeAllActiveForUserAsync(existing.UserId, cancellationToken);
+            throw new UnauthorizedException("Refresh token has already been used. Please log in again.");
+        }
+
         if (!existing.IsActive)
-            throw new UnauthorizedException("Refresh token is expired or has already been used.");
+            throw new UnauthorizedException("Refresh token has expired. Please log in again.");
 
         // Fetched separately rather than via an Include() on the query
         // above: existing is about to be passed to Update() below, and an
@@ -68,6 +82,15 @@ public class AuthService(
         // change to it with stale AsNoTracking values (see RefreshTokenRepository).
         var user = await unitOfWork.Users.GetByIdAsync(existing.UserId, cancellationToken)
             ?? throw new UnauthorizedException("Invalid refresh token.");
+
+        // Same check LoginAsync does. Without it, deactivating an account
+        // only blocked new logins — any refresh token issued before the
+        // deactivation kept minting access tokens until it expired (14 days).
+        if (!user.IsActive)
+        {
+            await unitOfWork.RefreshTokens.RevokeAllActiveForUserAsync(user.Id, cancellationToken);
+            throw new UnauthorizedException("This account has been deactivated.");
+        }
 
         var (newRawToken, newExpiresAt) = tokenService.GenerateRefreshToken();
         var newTokenHash = tokenService.HashRefreshToken(newRawToken);

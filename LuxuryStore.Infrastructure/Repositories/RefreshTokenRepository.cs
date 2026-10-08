@@ -17,4 +17,17 @@ public class RefreshTokenRepository(AppDbContext context) : GenericRepository<Re
     // on the one path that actually needs it (RefreshAsync).
     public async Task<RefreshToken?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
         await DbSet.AsNoTracking().FirstOrDefaultAsync(rt => rt.TokenHash == tokenHash, cancellationToken);
+
+    // Set-based UPDATE straight in the database (no entities loaded, no
+    // change tracker involved): "revoke all of this user's live sessions"
+    // is one statement no matter how many devices they're logged in on.
+    // RefreshToken.IsActive is a computed C# property, so it can't be
+    // translated to SQL — the filter spells out the same rule by hand.
+    public async Task<int> RevokeAllActiveForUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        return await DbSet
+            .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > now)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(rt => rt.RevokedAt, now), cancellationToken);
+    }
 }

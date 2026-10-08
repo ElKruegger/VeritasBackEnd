@@ -1,8 +1,10 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using LuxuryStore.Application;
 using LuxuryStore.Infrastructure;
 using LuxuryStore_Backend.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
@@ -95,19 +97,49 @@ try
         });
     builder.Services.AddAuthorization();
 
-    // Rate limiting (brief section 9): fixed-window, per-client-IP. Applied
-    // to Register/Login/Refresh via [EnableRateLimiting("auth")] — exactly
-    // the endpoints an unauthenticated attacker would hammer. Checkout gets
-    // its own policy once that endpoint exists (brief 7.4).
+    // Rate limiting (brief section 9): fixed window, partitioned per client
+    // IP — each IP gets its own 5-requests/minute bucket. Applied to
+    // Register/Login/Refresh via [EnableRateLimiting("auth")].
+    //
+    // The previous version used options.AddFixedWindowLimiter("auth", ...),
+    // which has NO partition key: it was one single shared bucket for the
+    // whole internet, so 5 login attempts from anyone locked everyone else
+    // out for the rest of the minute. AddPolicy + RateLimitPartition is the
+    // per-key form. Checkout gets its own policy once that endpoint exists
+    // (brief 7.4), partitioned per user id for authenticated callers.
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        options.AddFixedWindowLimiter("auth", limiterOptions =>
-        {
-            limiterOptions.Window = TimeSpan.FromMinutes(1);
-            limiterOptions.PermitLimit = 5;
-            limiterOptions.QueueLimit = 0;
-        });
+        options.AddPolicy("auth", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                // RemoteIpAddress is the real client IP only because
+                // UseForwardedHeaders runs first in the pipeline (see below);
+                // without it, every request on Render would share the
+                // proxy's IP and we'd be back to one global bucket.
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = 5,
+                    QueueLimit = 0
+                }));
+    });
+
+    // Render (and most PaaS hosts) terminate TLS at their edge proxy and
+    // forward plain HTTP to the container, adding X-Forwarded-For (client
+    // IP) and X-Forwarded-Proto (original scheme). Without honoring them,
+    // RemoteIpAddress is the proxy's IP (breaks per-IP rate limiting) and
+    // Request.Scheme is "http" (UseHttpsRedirection could redirect-loop).
+    // The known-proxy lists are cleared because Render doesn't publish a
+    // fixed proxy IP range — acceptable only because the container is not
+    // reachable except through that proxy. ForwardLimit stays at the
+    // default 1: only the hop added by the nearest proxy is trusted, so a
+    // client can't spoof its IP by sending its own X-Forwarded-For.
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
     });
 
     // Centralized error handling — see Middleware/GlobalExceptionHandler.cs.
@@ -117,6 +149,10 @@ try
     builder.Services.AddHealthChecks();
 
     var app = builder.Build();
+
+    // Must be first: everything below (rate limiter partitioning, HTTPS
+    // redirection, request logging) reads the client IP / scheme.
+    app.UseForwardedHeaders();
 
     app.UseExceptionHandler();
 
