@@ -20,11 +20,10 @@ public class ProductVariant : BaseEntity
     public int StockQuantity { get; set; }
     public bool IsActive { get; set; } = true;
 
-    // Npgsql's EF Core provider maps List<string> to a native Postgres
-    // array column (text[]) by convention, so the gallery images for this
-    // variant live here without a separate ProductImage table.
-    public List<string> ImageUrls { get; set; } = [];
-
     public Guid ProductId { get; set; }
     public Product Product { get; set; } = null!;
+
+    // Variant-specific images only; product-wide photography lives on
+    // Product.Images with VariantId = null (see ProductImage).
+    public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
 }

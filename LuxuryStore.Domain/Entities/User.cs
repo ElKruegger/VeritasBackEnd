@@ -1,4 +1,5 @@
 using LuxuryStore.Domain.Common;
+using LuxuryStore.Domain.Enums;
 
 namespace LuxuryStore.Domain.Entities;
 
@@ -15,6 +16,10 @@ public class User : BaseEntity
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+
+    // Every self-registered account is a Customer; see UserRole for how an
+    // account becomes Admin. Issued as the "role" claim of the access token.
+    public UserRole Role { get; set; } = UserRole.Customer;
 
     public ICollection<Address> Addresses { get; set; } = new List<Address>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();

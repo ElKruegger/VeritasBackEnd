@@ -26,6 +26,12 @@
          UserManager, no IdentityDbContext). AuthService depends on the
          interface; DependencyInjection.cs registers the concrete class. -->
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.12" />
+    <!-- Request validation (brief section 9). The validators live here, next
+         to the DTOs they validate; the API project only runs them (see
+         LuxuryStore-Backend/Filters/FluentValidationFilter.cs).
+         DependencyInjectionExtensions provides AddValidatorsFromAssemblyContaining. -->
+    <PackageReference Include="FluentValidation" Version="12.0.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.0.0" />
   </ItemGroup>
 
 </Project>

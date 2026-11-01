@@ -1,5 +1,7 @@
+using System.IdentityModel.Tokens.Jwt;
 using LuxuryStore.Application.DTOs;
 using LuxuryStore.Application.Interfaces;
+using LuxuryStore.Infrastructure.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -12,36 +14,35 @@ namespace LuxuryStore_Backend.Controllers;
 ///
 /// AccessToken/RefreshToken never appear in a JSON response body — they're
 /// written straight into httpOnly, Secure cookies (never localStorage, per
-/// the brief) and the client never touches their raw values. Register/Login/
-/// Refresh are rate-limited (brief section 9) since they're exactly the
-/// endpoints an unauthenticated attacker would hammer.
+/// the brief; see AuthCookies) and the client never touches their raw
+/// values. Register/Login/Refresh are rate-limited (brief section 9) since
+/// they're exactly the endpoints an unauthenticated attacker would hammer.
 /// </summary>
 [ApiController]
 [Route("api/v1/auth")]
 public class AuthController(IAuthService authService) : ControllerBase
 {
-    private const string AccessTokenCookie = "access_token";
-    private const string RefreshTokenCookie = "refresh_token";
-
     [HttpPost("register")]
     [EnableRateLimiting("auth")]
     [ProducesResponseType<UserDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<UserDto>> Register(RegisterDto dto, CancellationToken cancellationToken)
     {
         var result = await authService.RegisterAsync(dto, cancellationToken);
-        SetAuthCookies(result);
+        AuthCookies.Write(Response, result);
         return CreatedAtAction(nameof(Me), null, result.User);
     }
 
     [HttpPost("login")]
     [EnableRateLimiting("auth")]
     [ProducesResponseType<UserDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<UserDto>> Login(LoginDto dto, CancellationToken cancellationToken)
     {
         var result = await authService.LoginAsync(dto, cancellationToken);
-        SetAuthCookies(result);
+        AuthCookies.Write(Response, result);
         return Ok(result.User);
     }
 
@@ -51,24 +52,29 @@ public class AuthController(IAuthService authService) : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<UserDto>> Refresh(CancellationToken cancellationToken)
     {
-        if (!Request.Cookies.TryGetValue(RefreshTokenCookie, out var refreshToken) || string.IsNullOrEmpty(refreshToken))
+        if (!Request.Cookies.TryGetValue(AuthCookies.RefreshToken, out var refreshToken) || string.IsNullOrEmpty(refreshToken))
             return Unauthorized();
 
         var result = await authService.RefreshAsync(refreshToken, cancellationToken);
-        SetAuthCookies(result);
+        AuthCookies.Write(Response, result);
         return Ok(result.User);
     }
 
+    /// <summary>
+    /// Deliberately NOT [Authorize]: the access token lives only 15 minutes,
+    /// so requiring it meant a user returning after a break could not log
+    /// out — the call 401'd and both cookies (plus a still-valid refresh
+    /// token on the server) survived. Logout only needs the refresh-token
+    /// cookie, is idempotent, and revoking your own session can't harm anyone.
+    /// </summary>
     [HttpPost("logout")]
-    [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
-        if (Request.Cookies.TryGetValue(RefreshTokenCookie, out var refreshToken) && !string.IsNullOrEmpty(refreshToken))
+        if (Request.Cookies.TryGetValue(AuthCookies.RefreshToken, out var refreshToken) && !string.IsNullOrEmpty(refreshToken))
             await authService.LogoutAsync(refreshToken, cancellationToken);
 
-        Response.Cookies.Delete(AccessTokenCookie, new CookieOptions { Path = "/" });
-        Response.Cookies.Delete(RefreshTokenCookie, new CookieOptions { Path = "/api/v1/auth" });
+        AuthCookies.Clear(Response);
         return NoContent();
     }
 
@@ -80,42 +86,21 @@ public class AuthController(IAuthService authService) : ControllerBase
     {
         // Populated straight from the validated JWT's claims (see
         // TokenService.GenerateAccessToken) — no database round trip needed
-        // just to answer "who is currently logged in".
-        var id = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-        var email = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email)?.Value;
+        // just to answer "who is currently logged in". Short claim names
+        // work here because Program.cs sets MapInboundClaims = false.
+        var id = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        var email = User.FindFirst(JwtRegisteredClaimNames.Email)?.Value;
 
-        if (id is null || email is null)
+        if (!Guid.TryParse(id, out var userId) || email is null)
             return Unauthorized();
 
-        return Ok(new UserDto { Id = Guid.Parse(id), Email = email });
-    }
-
-    private void SetAuthCookies(AuthResultDto result)
-    {
-        // SameSite=None + Secure: the frontend (Vercel) and backend (Render)
-        // are different origins even in production, so the cookie must be
-        // marked cross-site-sendable. That requires Secure=true, which in
-        // turn requires HTTPS locally too — `dotnet dev-certs https --trust`
-        // if this 401s unexpectedly during local development.
-        Response.Cookies.Append(AccessTokenCookie, result.AccessToken, new CookieOptions
+        return Ok(new UserDto
         {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
-            Expires = result.AccessTokenExpiresAt,
-            Path = "/"
-        });
-
-        Response.Cookies.Append(RefreshTokenCookie, result.RefreshToken, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
-            Expires = result.RefreshTokenExpiresAt,
-            // Narrower path: the refresh token only ever needs to travel to
-            // /auth/refresh and /auth/logout, so it's never sent (and never
-            // at risk) on every other request the way the access token is.
-            Path = "/api/v1/auth"
+            Id = userId,
+            Email = email,
+            FirstName = User.FindFirst(JwtRegisteredClaimNames.GivenName)?.Value ?? string.Empty,
+            LastName = User.FindFirst(JwtRegisteredClaimNames.FamilyName)?.Value ?? string.Empty,
+            Role = User.FindFirst(JwtClaimTypes.Role)?.Value ?? string.Empty
         });
     }
 }

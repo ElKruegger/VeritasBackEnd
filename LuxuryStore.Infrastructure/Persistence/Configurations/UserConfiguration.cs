@@ -16,6 +16,15 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.FirstName).IsRequired().HasMaxLength(100);
         builder.Property(u => u.LastName).IsRequired().HasMaxLength(100);
 
+        // Stored as text ("Customer"/"Admin"), not as the enum's int value —
+        // readable in Supabase Studio and safe against enum reordering (see
+        // UserRole). The migration that added this column backfills existing
+        // rows with 'Customer'.
+        builder.Property(u => u.Role)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
         // Emails are normalized to lowercase before being persisted (see
         // AuthService/UserRepository), so a plain unique index is enough —
         // no need for a separate NormalizedEmail column like full ASP.NET

@@ -44,6 +44,12 @@ public interface IProductRepository : IGenericRepository<Product>
     void AddVariant(ProductVariant variant);
     void UpdateVariant(ProductVariant variant);
     void RemoveVariant(ProductVariant variant);
+
+    // Images, same reasoning as variants: always reached through their product.
+    Task<ProductImage?> GetImageAsync(Guid productId, Guid imageId, CancellationToken cancellationToken = default);
+    Task<int?> GetMaxImageSortOrderAsync(Guid productId, CancellationToken cancellationToken = default);
+    void AddImage(ProductImage image);
+    void RemoveImage(ProductImage image);
 }
 
 public interface IUserRepository : IGenericRepository<User>
@@ -55,6 +61,15 @@ public interface IUserRepository : IGenericRepository<User>
 public interface IRefreshTokenRepository : IGenericRepository<RefreshToken>
 {
     Task<RefreshToken?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Revokes every still-active refresh token of a user in one UPDATE
+    /// statement. Runs immediately (ExecuteUpdate), NOT deferred until
+    /// IUnitOfWork.SaveChangesAsync — callers use it right before throwing,
+    /// so there is no later SaveChanges that would persist a staged change.
+    /// Returns how many tokens were revoked.
+    /// </summary>
+    Task<int> RevokeAllActiveForUserAsync(Guid userId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

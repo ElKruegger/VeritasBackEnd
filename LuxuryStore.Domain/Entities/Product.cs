@@ -19,4 +19,5 @@ public class Product : BaseEntity
     public Category Category { get; set; } = null!;
 
     public ICollection<ProductVariant> Variants { get; set; } = new List<ProductVariant>();
+    public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
 }
