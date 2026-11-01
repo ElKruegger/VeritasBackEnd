@@ -253,7 +253,9 @@ try
 
     app.Run();
 }
-catch (Exception ex)
+// HostAbortedException is thrown on purpose by design-time tools (dotnet ef)
+// after they grab the DbContext and stop the host — expected, not a crash.
+catch (Exception ex) when (ex is not HostAbortedException)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
 }
