@@ -39,6 +39,9 @@ public interface IProductService
     Task<ProductVariantDto> AddVariantAsync(Guid productId, CreateProductVariantDto dto, CancellationToken cancellationToken = default);
     Task<ProductVariantDto> UpdateVariantAsync(Guid productId, Guid variantId, UpdateProductVariantDto dto, CancellationToken cancellationToken = default);
     Task RemoveVariantAsync(Guid productId, Guid variantId, CancellationToken cancellationToken = default);
+
+    Task<ProductImageDto> AddImageAsync(Guid productId, CreateProductImageDto dto, CancellationToken cancellationToken = default);
+    Task RemoveImageAsync(Guid productId, Guid imageId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Registration, login, refresh-token rotation and logout (brief 7.2).</summary>

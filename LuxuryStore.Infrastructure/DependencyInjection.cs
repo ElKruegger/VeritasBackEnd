@@ -2,6 +2,8 @@ using LuxuryStore.Application.Interfaces;
 using LuxuryStore.Infrastructure.Persistence;
 using LuxuryStore.Infrastructure.Repositories;
 using LuxuryStore.Infrastructure.Security;
+using LuxuryStore.Infrastructure.Persistence.Seed;
+using LuxuryStore.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,6 +50,14 @@ public static class DependencyInjection
         // Scoped vs Singleton makes no real difference — Scoped chosen only
         // to stay consistent with everything else this layer registers.
         services.AddScoped<ITokenService, TokenService>();
+
+        // Stateless and read-only after construction (the base URL is read
+        // once from options), so a single shared instance is fine.
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+        services.AddSingleton<IImageUrlResolver, ImageUrlResolver>();
+
+        // Only resolved when the app is started with --seed (see Program.cs).
+        services.AddScoped<CatalogSeeder>();
 
         return services;
     }

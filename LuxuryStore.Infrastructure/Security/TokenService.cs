@@ -32,10 +32,19 @@ public class TokenService(IConfiguration configuration) : ITokenService
         var minutes = configuration.GetValue<int?>("Jwt:AccessTokenMinutes") ?? 15;
         var expiresAt = DateTime.UtcNow.AddMinutes(minutes);
 
+        // Short JWT claim names on purpose ("sub", "email", "role", ...).
+        // Program.cs sets MapInboundClaims = false, so the API reads these
+        // exact names back (no silent remapping to the long WS-Fed URIs),
+        // and RoleClaimType = "role" is what [Authorize(Policy = AdminOnly)]
+        // checks. GivenName/FamilyName let GET /auth/me answer without a
+        // database round trip.
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim(JwtRegisteredClaimNames.GivenName, user.FirstName),
+            new Claim(JwtRegisteredClaimNames.FamilyName, user.LastName),
+            new Claim(JwtClaimTypes.Role, user.Role.ToString()),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
@@ -76,6 +85,24 @@ public class TokenService(IConfiguration configuration) : ITokenService
                 "32 characters — run from the LuxuryStore-Backend project folder, where the UserSecretsId " +
                 "lives) or the Jwt__SigningKey environment variable in every other environment.");
 
-        return new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+        return CreateSigningKey(key);
+    }
+
+    /// <summary>
+    /// Single place that turns the configured secret into a signing key —
+    /// used both here (issuing) and by Program.cs (validating), so the two
+    /// can never disagree on encoding or the minimum-length rule.
+    /// HS256 needs at least 256 bits of key material; a shorter secret is
+    /// brute-forceable offline from any single captured token.
+    /// </summary>
+    public static SymmetricSecurityKey CreateSigningKey(string secret)
+    {
+        var bytes = Encoding.UTF8.GetBytes(secret);
+        if (bytes.Length < 32)
+            throw new InvalidOperationException(
+                $"Configuration 'Jwt:SigningKey' is too short ({bytes.Length} bytes). HS256 requires at least " +
+                "32 bytes — generate one in PowerShell with: [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))");
+
+        return new SymmetricSecurityKey(bytes);
     }
 }

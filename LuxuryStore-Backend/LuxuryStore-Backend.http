@@ -1,6 +1,48 @@
-@LuxuryStore_Backend_HostAddress = http://localhost:5152
+# Quick manual checks from Visual Studio / Rider / VS Code REST Client.
+# Auth cookies are Secure, so use the https profile (dotnet run --launch-profile https).
+@host = https://localhost:7214
+@api = {{host}}/api/v1
 
-GET {{LuxuryStore_Backend_HostAddress}}/weatherforecast/
+### Health (Render pings this)
+GET {{host}}/health
+
+### Catalog — public reads
+GET {{api}}/categories
 Accept: application/json
 
 ###
+GET {{api}}/products?pageNumber=1&pageSize=12
+Accept: application/json
+
+###
+GET {{api}}/products/slug/rolex-submariner-date
+Accept: application/json
+
+### Register (sets httpOnly auth cookies)
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "you@example.com",
+  "password": "ChangeMe2026",
+  "firstName": "Erick",
+  "lastName": "Krug"
+}
+
+### Login
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "you@example.com",
+  "password": "ChangeMe2026"
+}
+
+### Who am I
+GET {{api}}/auth/me
+
+### Refresh (rotates the refresh token)
+POST {{api}}/auth/refresh
+
+### Logout
+POST {{api}}/auth/logout

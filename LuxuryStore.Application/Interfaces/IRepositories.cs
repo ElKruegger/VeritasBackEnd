@@ -44,6 +44,12 @@ public interface IProductRepository : IGenericRepository<Product>
     void AddVariant(ProductVariant variant);
     void UpdateVariant(ProductVariant variant);
     void RemoveVariant(ProductVariant variant);
+
+    // Images, same reasoning as variants: always reached through their product.
+    Task<ProductImage?> GetImageAsync(Guid productId, Guid imageId, CancellationToken cancellationToken = default);
+    Task<int?> GetMaxImageSortOrderAsync(Guid productId, CancellationToken cancellationToken = default);
+    void AddImage(ProductImage image);
+    void RemoveImage(ProductImage image);
 }
 
 public interface IUserRepository : IGenericRepository<User>

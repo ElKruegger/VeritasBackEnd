@@ -1,4 +1,5 @@
 using LuxuryStore.Application.DTOs;
+using LuxuryStore.Application.Interfaces;
 using LuxuryStore.Domain.Entities;
 
 namespace LuxuryStore.Application.Mapping;
@@ -48,13 +49,21 @@ public static class MappingExtensions
         VariantLabel = variant.VariantLabel,
         EffectivePrice = variant.PriceOverride ?? variant.Product.BasePrice,
         StockQuantity = variant.StockQuantity,
-        IsActive = variant.IsActive,
-        ImageUrls = variant.ImageUrls
+        IsActive = variant.IsActive
     };
 
-    // Full detail shape — expects Brand, Category and Variants to be loaded
-    // (see IProductRepository.GetByIdWithDetailsAsync / GetBySlugWithDetailsAsync).
-    public static ProductDto ToDto(this Product product) => new()
+    public static ProductImageDto ToDto(this ProductImage image, IImageUrlResolver urls) => new()
+    {
+        Id = image.Id,
+        Url = urls.Resolve(image.Path, image.AltText),
+        AltText = image.AltText,
+        SortOrder = image.SortOrder,
+        VariantId = image.VariantId
+    };
+
+    // Full detail shape — expects Brand, Category, Variants and Images to be
+    // loaded (see IProductRepository.GetByIdWithDetailsAsync / GetBySlugWithDetailsAsync).
+    public static ProductDto ToDto(this Product product, IImageUrlResolver urls) => new()
     {
         Id = product.Id,
         Name = product.Name,
@@ -64,19 +73,45 @@ public static class MappingExtensions
         IsActive = product.IsActive,
         Brand = product.Brand.ToDto(),
         Category = product.Category.ToDto(),
-        Variants = product.Variants.Select(v => v.ToDto()).ToList()
+        Images = product.Images
+            .OrderBy(i => i.SortOrder)
+            .Select(i => i.ToDto(urls))
+            .ToList(),
+        Variants = product.Variants
+            .OrderBy(v => v.CreatedAt) // insertion order: sizes are entered smallest-first
+            .Select(v => v.ToDto())
+            .ToList()
     };
 
-    // Lightweight shape for catalog grids — expects Brand, Category and
-    // Variants to be loaded (used for the primary image only).
-    public static ProductListItemDto ToListItemDto(this Product product) => new()
+    // Lightweight shape for catalog grids — expects Brand, Category and the
+    // primary image to be loaded (IProductRepository.GetPagedAsync loads
+    // only the first image per product, not the whole gallery).
+    public static ProductListItemDto ToListItemDto(this Product product, IImageUrlResolver urls)
     {
-        Id = product.Id,
-        Name = product.Name,
-        Slug = product.Slug,
-        BasePrice = product.BasePrice,
-        BrandName = product.Brand.Name,
-        CategoryName = product.Category.Name,
-        PrimaryImageUrl = product.Variants.SelectMany(v => v.ImageUrls).FirstOrDefault()
+        var primary = product.Images
+            .OrderBy(i => i.VariantId.HasValue) // product-wide shots first
+            .ThenBy(i => i.SortOrder)
+            .FirstOrDefault();
+
+        return new ProductListItemDto
+        {
+            Id = product.Id,
+            Name = product.Name,
+            Slug = product.Slug,
+            BasePrice = product.BasePrice,
+            BrandName = product.Brand.Name,
+            CategoryName = product.Category.Name,
+            PrimaryImageUrl = primary is null ? null : urls.Resolve(primary.Path, primary.AltText),
+            PrimaryImageAltText = primary?.AltText
+        };
+    }
+
+    public static UserDto ToDto(this User user) => new()
+    {
+        Id = user.Id,
+        Email = user.Email,
+        FirstName = user.FirstName,
+        LastName = user.LastName,
+        Role = user.Role.ToString()
     };
 }

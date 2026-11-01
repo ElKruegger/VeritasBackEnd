@@ -1,5 +1,7 @@
+using FluentValidation;
 using LuxuryStore.Application.Interfaces;
 using LuxuryStore.Application.Services;
+using LuxuryStore.Application.Validation;
 using LuxuryStore.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +39,11 @@ public static class DependencyInjection
         // store abstractions instead. Stateless and thread-safe, so
         // Singleton is correct (and avoids reallocating it every request).
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+
+        // Every AbstractValidator<T> in this assembly (Validation/), resolved
+        // per request by the API's FluentValidationFilter. Scoped is the
+        // library default and matches the services above.
+        services.AddValidatorsFromAssemblyContaining<RegisterDtoValidator>();
 
         return services;
     }

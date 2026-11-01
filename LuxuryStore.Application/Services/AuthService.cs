@@ -1,6 +1,7 @@
 using LuxuryStore.Application.DTOs;
 using LuxuryStore.Application.Exceptions;
 using LuxuryStore.Application.Interfaces;
+using LuxuryStore.Application.Mapping;
 using LuxuryStore.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 
@@ -119,7 +120,7 @@ public class AuthService(
             AccessTokenExpiresAt = accessExpiresAt,
             RefreshToken = newRawToken,
             RefreshTokenExpiresAt = newExpiresAt,
-            User = ToUserDto(user)
+            User = user.ToDto()
         };
     }
 
@@ -158,15 +159,7 @@ public class AuthService(
             AccessTokenExpiresAt = accessExpiresAt,
             RefreshToken = refreshToken,
             RefreshTokenExpiresAt = refreshExpiresAt,
-            User = ToUserDto(user)
+            User = user.ToDto()
         };
     }
-
-    private static UserDto ToUserDto(User user) => new()
-    {
-        Id = user.Id,
-        Email = user.Email,
-        FirstName = user.FirstName,
-        LastName = user.LastName
-    };
 }
