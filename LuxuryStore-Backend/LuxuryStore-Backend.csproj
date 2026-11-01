@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="FluentValidation" Version="12.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <!-- Test UI for the OpenAPI document Microsoft.AspNetCore.OpenApi already
          generates. .NET 10's template dropped Swagger UI by default (that's
