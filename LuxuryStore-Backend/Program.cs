@@ -242,6 +242,13 @@ try
     // never carries cookies) is answered here instead of being 401'd.
     app.UseCors();
 
+    // CSRF defense: state-changing requests must come from this API's own
+    // origin or a CORS-allowed origin (see Middleware/OriginValidationMiddleware.cs).
+    // After UseCors (preflights are answered there), before authentication.
+    // Cast to object: UseMiddleware takes params object[], and a bare
+    // string[] would be spread into one argument per origin.
+    app.UseMiddleware<OriginValidationMiddleware>((object)allowedOrigins);
+
     app.UseRateLimiter();
 
     app.UseAuthentication();
