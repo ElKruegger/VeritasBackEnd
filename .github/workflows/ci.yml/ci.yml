@@ -1,0 +1,75 @@
+# Continuous integration for the Véritas backend.
+#
+# Runs on every pull request into developer/main and on every push to them
+# (i.e. after a merge). A red run blocks the merge once branch protection
+# requires the "Build & test" check.
+
+name: CI
+
+on:
+  push:
+    branches: [main, developer]
+  pull_request:
+    branches: [main, developer]
+  workflow_dispatch: # manual "Run workflow" button in the Actions tab
+
+# Least privilege: the pipeline only needs to read the code.
+permissions:
+  contents: read
+
+# A newer push to the same branch/PR cancels the run still in progress.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  SOLUTION: LuxuryStore-Backend.slnx
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # NuGet packages are reused between runs; the key changes whenever a
+      # project file (package versions) or global.json changes.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore "$SOLUTION"
+
+      - name: Build
+        run: dotnet build "$SOLUTION" --configuration Release --no-restore
+
+      # global.json opts dotnet test into Microsoft.Testing.Platform
+      # (required by xUnit v3 on the .NET 10 SDK).
+      - name: Unit tests
+        run: dotnet test --solution "$SOLUTION" --configuration Release --no-build
+
+      # Fails the run when any direct or transitive package has a known
+      # High or Critical vulnerability (e.g. the System.Security.Cryptography
+      # advisories fixed by moving to 10.0.13). Moderate/Low are reported in
+      # the log but do not block.
+      - name: Audit NuGet packages for known vulnerabilities
+        run: |
+          dotnet list "$SOLUTION" package --vulnerable --include-transitive 2>&1 | tee vulnerability-report.txt
+          if grep -qE '\b(High|Critical)\b' vulnerability-report.txt; then
+            echo "::error title=Vulnerable packages::High or Critical vulnerabilities found. See the report above."
+            exit 1
+          fi

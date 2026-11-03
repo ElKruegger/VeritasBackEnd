@@ -1,0 +1,23 @@
+# Weekly pull requests that keep NuGet packages and GitHub Actions up to
+# date. Every Dependabot PR goes through the CI pipeline before it can be
+# merged, so an update that breaks the build or the tests is caught there.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    target-branch: developer
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the whole Microsoft/.NET family instead of one per package.
+      microsoft:
+        patterns: ["Microsoft.*", "System.*"]
+      test-tooling:
+        patterns: ["xunit*", "NSubstitute*", "Shouldly", "coverlet*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: developer
+    schedule:
+      interval: weekly
