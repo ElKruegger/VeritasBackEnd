@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- xUnit v3 test projects are executables (each one is its own test host). -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>LuxuryStore.UnitTests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Unit tests only: no database, no HTTP host, no network. Everything
+       outside the class under test is either a real in-memory object or an
+       NSubstitute fake. Database/HTTP behaviour belongs in a separate
+       integration-test project. -->
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="Shouldly" />
+    <Using Include="NSubstitute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LuxuryStore.Domain\LuxuryStore.Domain.csproj" />
+    <ProjectReference Include="..\LuxuryStore.Application\LuxuryStore.Application.csproj" />
+    <ProjectReference Include="..\LuxuryStore.Infrastructure\LuxuryStore.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
+    <PackageReference Include="NSubstitute" Version="6.2.0" />
+    <PackageReference Include="Shouldly" Version="4.3.0" />
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
+  </ItemGroup>
+
+</Project>

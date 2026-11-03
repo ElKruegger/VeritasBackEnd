@@ -3,4 +3,5 @@
   <Project Path="LuxuryStore.Domain/LuxuryStore.Domain.csproj" />
   <Project Path="LuxuryStore.Application/LuxuryStore.Application.csproj" />
   <Project Path="LuxuryStore.Infrastructure/LuxuryStore.Infrastructure.csproj" />
+  <Project Path="LuxuryStore.UnitTests/LuxuryStore.UnitTests.csproj" />
 </Solution>
