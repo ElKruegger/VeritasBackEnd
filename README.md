@@ -1,5 +1,7 @@
 # Véritas — Backend API
 
+[![CI](https://github.com/ElKruegger/VeritasBackEnd/actions/workflows/ci.yml/badge.svg?branch=developer)](https://github.com/ElKruegger/VeritasBackEnd/actions/workflows/ci.yml)
+
 REST API for **Véritas**, a luxury menswear and lifestyle e-commerce platform (tailoring, footwear, watches, accessories and fragrances).
 
 Built with ASP.NET Core on .NET 10 following a layered Clean Architecture, backed by PostgreSQL on Supabase.
@@ -16,6 +18,8 @@ Built with ASP.NET Core on .NET 10 following a layered Clean Architecture, backe
 | Logging | Serilog (structured, console sink) |
 | API documentation | OpenAPI document + Scalar UI (development only) |
 | Images | Supabase Storage (public bucket), metadata in `ProductImages` |
+| Testing | xUnit v3 on Microsoft.Testing.Platform, NSubstitute, Shouldly |
+| CI | GitHub Actions, Dependabot |
 
 ## Solution layout
 
@@ -27,8 +31,10 @@ LuxuryStore-Backend/            (repository root)
 ├── LuxuryStore.Infrastructure  EF Core DbContext, configurations, migrations,
 │                               repositories, JWT issuing, storage URL resolver,
 │                               catalog seeder.
-└── LuxuryStore-Backend         API host: controllers, Program.cs, middleware,
-                                filters, authorization policies.
+├── LuxuryStore-Backend         API host: controllers, Program.cs, middleware,
+│                               filters, authorization policies.
+└── LuxuryStore.UnitTests       Unit tests for the Application and
+                                Infrastructure layers.
 ```
 
 Dependencies point inwards only: API → Application/Infrastructure → Domain. Application never references Infrastructure.
@@ -82,6 +88,33 @@ dotnet run --project LuxuryStore-Backend --launch-profile https
 - API: `https://localhost:7214/api/v1`
 - Interactive documentation (development only): `https://localhost:7214/scalar`
 - Health check: `https://localhost:7214/health`
+
+## Testing
+
+```bash
+dotnet test
+```
+
+`global.json` opts `dotnet test` into Microsoft.Testing.Platform, which xUnit v3 requires on the .NET 10 SDK.
+
+The unit test suite runs without a database or network and covers:
+
+- **Validation rules**: slugs, SKUs, prices, password policy, image paths (including path traversal attempts) and catalog query parameters.
+- **Authentication**: email normalization, password hashing, generic login errors, deactivated accounts, refresh-token rotation, reuse detection that revokes every session, and idempotent logout.
+- **Catalog services**: duplicate slugs, missing brands, image ordering and ownership checks.
+- **Mapping**: effective variant price, gallery order and primary image selection.
+- **Security primitives**: JWT claims, algorithm and lifetime, minimum signing-key length, refresh-token hashing.
+- **Image URL resolution**: bucket URLs, escaping and placeholders.
+
+## Continuous integration
+
+Every pull request into `developer` or `main`, and every push to those branches, runs the [CI workflow](.github/workflows/ci.yml):
+
+1. Restore and build the solution in Release configuration.
+2. Run the unit test suite.
+3. Audit direct and transitive NuGet packages; the run fails on any High or Critical vulnerability.
+
+Dependabot opens weekly pull requests for NuGet packages and GitHub Actions, and each of them goes through the same pipeline.
 
 ## Configuration
 
