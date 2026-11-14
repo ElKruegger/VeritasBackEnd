@@ -15,10 +15,6 @@ public class ProductVariantConfiguration : IEntityTypeConfiguration<ProductVaria
         builder.Property(v => v.VariantLabel).IsRequired().HasMaxLength(50);
         builder.Property(v => v.PriceOverride).HasPrecision(10, 2);
 
-        // ImageUrls (List<string>) is left unconfigured on purpose — the
-        // Npgsql EF Core provider maps it to a native Postgres array column
-        // (text[]) by convention, no value converter needed.
-
         builder.HasIndex(v => v.Sku).IsUnique();
 
         // Cascade here (unlike Product -> Brand/Category): a variant has no

@@ -1,5 +1,8 @@
+using System.Globalization;
+using FluentValidation;
 using LuxuryStore.Application.Interfaces;
 using LuxuryStore.Application.Services;
+using LuxuryStore.Application.Validation;
 using LuxuryStore.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +40,17 @@ public static class DependencyInjection
         // store abstractions instead. Stateless and thread-safe, so
         // Singleton is correct (and avoids reallocating it every request).
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+
+        // Every AbstractValidator<T> in this assembly (Validation/), resolved
+        // per request by the API's FluentValidationFilter. Scoped is the
+        // library default and matches the services above.
+        services.AddValidatorsFromAssemblyContaining<RegisterDtoValidator>();
+
+        // FluentValidation localizes its built-in messages from the OS UI
+        // culture (a pt-BR Windows answered "'Email' é um endereço de email
+        // inválido."). The API contract is English-only (brief section 1), so
+        // the default messages are pinned to English regardless of the machine.
+        ValidatorOptions.Global.LanguageManager.Culture = new CultureInfo("en");
 
         return services;
     }

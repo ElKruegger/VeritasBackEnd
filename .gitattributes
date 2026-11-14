@@ -1,0 +1,8 @@
+# Files executed or parsed inside Linux containers/runners must keep LF line
+# endings even when the repository is checked out on Windows (a CRLF after
+# a Dockerfile "\" line continuation breaks the build).
+Dockerfile        text eol=lf
+.dockerignore     text eol=lf
+*.yml             text eol=lf
+*.yaml            text eol=lf
+*.sh              text eol=lf

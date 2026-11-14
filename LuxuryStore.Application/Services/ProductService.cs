@@ -7,7 +7,7 @@ using LuxuryStore.Domain.Entities;
 
 namespace LuxuryStore.Application.Services;
 
-public class ProductService(IUnitOfWork unitOfWork) : IProductService
+public class ProductService(IUnitOfWork unitOfWork, IImageUrlResolver imageUrls) : IProductService
 {
     public async Task<PagedResult<ProductListItemDto>> GetPagedAsync(ProductQueryParams query, CancellationToken cancellationToken = default)
     {
@@ -15,7 +15,7 @@ public class ProductService(IUnitOfWork unitOfWork) : IProductService
 
         return new PagedResult<ProductListItemDto>
         {
-            Items = items.Select(p => p.ToListItemDto()).ToList(),
+            Items = items.Select(p => p.ToListItemDto(imageUrls)).ToList(),
             PageNumber = query.PageNumber,
             PageSize = query.PageSize,
             TotalCount = totalCount
@@ -26,14 +26,14 @@ public class ProductService(IUnitOfWork unitOfWork) : IProductService
     {
         var product = await unitOfWork.Products.GetByIdWithDetailsAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Product '{id}' was not found.");
-        return product.ToDto();
+        return product.ToDto(imageUrls);
     }
 
     public async Task<ProductDto> GetBySlugAsync(string slug, CancellationToken cancellationToken = default)
     {
         var product = await unitOfWork.Products.GetBySlugWithDetailsAsync(slug, cancellationToken)
             ?? throw new NotFoundException($"Product '{slug}' was not found.");
-        return product.ToDto();
+        return product.ToDto(imageUrls);
     }
 
     public async Task<ProductDto> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default)
@@ -61,7 +61,7 @@ public class ProductService(IUnitOfWork unitOfWork) : IProductService
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var created = await unitOfWork.Products.GetByIdWithDetailsAsync(product.Id, cancellationToken);
-        return created!.ToDto();
+        return created!.ToDto(imageUrls);
     }
 
     public async Task<ProductDto> UpdateAsync(Guid id, UpdateProductDto dto, CancellationToken cancellationToken = default)
@@ -90,7 +90,7 @@ public class ProductService(IUnitOfWork unitOfWork) : IProductService
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var updated = await unitOfWork.Products.GetByIdWithDetailsAsync(id, cancellationToken);
-        return updated!.ToDto();
+        return updated!.ToDto(imageUrls);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -98,9 +98,11 @@ public class ProductService(IUnitOfWork unitOfWork) : IProductService
         var product = await unitOfWork.Products.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Product '{id}' was not found.");
 
-        // Variants cascade at the database level (see
-        // ProductVariantConfiguration.OnDelete(Cascade)) — no need to load
-        // and remove them client-side.
+        // Variants and images cascade at the database level (see
+        // ProductVariantConfiguration / ProductImageConfiguration
+        // .OnDelete(Cascade)) — no need to load and remove them client-side.
+        // The image files themselves stay in the Storage bucket; removing
+        // orphaned objects is an operator task for now.
         unitOfWork.Products.Remove(product);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
@@ -116,8 +118,7 @@ public class ProductService(IUnitOfWork unitOfWork) : IProductService
             Sku = dto.Sku,
             VariantLabel = dto.VariantLabel,
             PriceOverride = dto.PriceOverride,
-            StockQuantity = dto.StockQuantity,
-            ImageUrls = dto.ImageUrls
+            StockQuantity = dto.StockQuantity
         };
 
         unitOfWork.Products.AddVariant(variant);
@@ -135,7 +136,6 @@ public class ProductService(IUnitOfWork unitOfWork) : IProductService
         variant.PriceOverride = dto.PriceOverride;
         variant.StockQuantity = dto.StockQuantity;
         variant.IsActive = dto.IsActive;
-        variant.ImageUrls = dto.ImageUrls;
         variant.UpdatedAt = DateTime.UtcNow;
 
         unitOfWork.Products.UpdateVariant(variant);
@@ -152,6 +152,43 @@ public class ProductService(IUnitOfWork unitOfWork) : IProductService
             ?? throw new NotFoundException($"Variant '{variantId}' was not found on product '{productId}'.");
 
         unitOfWork.Products.RemoveVariant(variant);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<ProductImageDto> AddImageAsync(Guid productId, CreateProductImageDto dto, CancellationToken cancellationToken = default)
+    {
+        if (await unitOfWork.Products.GetByIdAsync(productId, cancellationToken) is null)
+            throw new NotFoundException($"Product '{productId}' was not found.");
+
+        // A variant-specific image must point at a variant of THIS product —
+        // the FK alone would happily accept a variant of some other product.
+        if (dto.VariantId is { } variantId &&
+            await unitOfWork.Products.GetVariantAsync(productId, variantId, cancellationToken) is null)
+            throw new NotFoundException($"Variant '{variantId}' was not found on product '{productId}'.");
+
+        var sortOrder = dto.SortOrder
+            ?? (await unitOfWork.Products.GetMaxImageSortOrderAsync(productId, cancellationToken) ?? -1) + 1;
+
+        var image = new ProductImage
+        {
+            ProductId = productId,
+            VariantId = dto.VariantId,
+            Path = dto.Path.Trim(),
+            AltText = dto.AltText.Trim(),
+            SortOrder = sortOrder
+        };
+
+        unitOfWork.Products.AddImage(image);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return image.ToDto(imageUrls);
+    }
+
+    public async Task RemoveImageAsync(Guid productId, Guid imageId, CancellationToken cancellationToken = default)
+    {
+        var image = await unitOfWork.Products.GetImageAsync(productId, imageId, cancellationToken)
+            ?? throw new NotFoundException($"Image '{imageId}' was not found on product '{productId}'.");
+
+        unitOfWork.Products.RemoveImage(image);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

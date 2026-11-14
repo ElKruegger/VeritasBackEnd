@@ -1,9 +1,17 @@
-using System.Text;
+using System.IdentityModel.Tokens.Jwt;
+using System.Threading.RateLimiting;
 using LuxuryStore.Application;
 using LuxuryStore.Infrastructure;
+using LuxuryStore.Infrastructure.Persistence;
+using LuxuryStore.Infrastructure.Persistence.Seed;
+using LuxuryStore.Infrastructure.Security;
+using LuxuryStore_Backend.Authorization;
+using LuxuryStore_Backend.Filters;
 using LuxuryStore_Backend.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
@@ -29,7 +37,9 @@ try
         .Enrich.FromLogContext());
 
     // Add services to the container.
-    builder.Services.AddControllers();
+    // FluentValidationFilter runs the Application layer's validators for
+    // every action argument (brief section 9) — see Filters/FluentValidationFilter.cs.
+    builder.Services.AddControllers(options => options.Filters.Add<FluentValidationFilter>());
 
     // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
     builder.Services.AddOpenApi();
@@ -68,6 +78,12 @@ try
                     "from the LuxuryStore-Backend project folder, where the UserSecretsId lives) or the " +
                     "Jwt__SigningKey environment variable in every other environment.");
 
+            // Keep the JWT's short claim names ("sub", "email", "role") as-is.
+            // With the default (true), the handler silently renames them to
+            // long WS-Fed URIs — "sub" becomes ClaimTypes.NameIdentifier — and
+            // AuthController.Me's FindFirst("sub") would never match.
+            options.MapInboundClaims = false;
+
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -75,9 +91,15 @@ try
                 ValidateAudience = true,
                 ValidAudience = jwtSection["Audience"],
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+                // Same key-building code (and >= 32-byte rule) as issuing.
+                IssuerSigningKey = TokenService.CreateSigningKey(signingKey),
+                // Pinned: only the algorithm this API actually signs with is
+                // accepted — closes the door on algorithm-confusion tricks.
+                ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                 ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromSeconds(30) // access tokens are short-lived on purpose; the 5-minute default is too generous here
+                ClockSkew = TimeSpan.FromSeconds(30), // access tokens are short-lived on purpose; the 5-minute default is too generous here
+                NameClaimType = JwtRegisteredClaimNames.Sub,
+                RoleClaimType = JwtClaimTypes.Role // what RequireRole / the AdminOnly policy checks
             };
 
             options.Events = new JwtBearerEvents
@@ -93,21 +115,86 @@ try
                 }
             };
         });
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorization(options =>
+    {
+        // Catalog writes (POST/PUT/DELETE on brands, categories, products,
+        // variants, images). See Authorization/Policies.cs and UserRole for
+        // how an account becomes Admin.
+        options.AddPolicy(Policies.AdminOnly, policy => policy
+            .RequireAuthenticatedUser()
+            .RequireRole(nameof(LuxuryStore.Domain.Enums.UserRole.Admin)));
+    });
 
-    // Rate limiting (brief section 9): fixed-window, per-client-IP. Applied
-    // to Register/Login/Refresh via [EnableRateLimiting("auth")] — exactly
-    // the endpoints an unauthenticated attacker would hammer. Checkout gets
-    // its own policy once that endpoint exists (brief 7.4).
+    // --- CORS (brief section 9: "restricted to the deployed frontend origin only") ---
+    // Origins come from two places, merged:
+    //   - Cors:AllowedOrigins (array) in appsettings — dev defaults live in
+    //     appsettings.Development.json (Vite on https://localhost:5173);
+    //   - FRONTEND_URL (brief section 10), comma-separated, set on Render.
+    // AllowCredentials is required for the httpOnly auth cookies to travel
+    // cross-origin, and the CORS spec forbids combining it with a wildcard
+    // origin — hence an explicit list, never AllowAnyOrigin.
+    var allowedOrigins = (builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
+        .Concat((builder.Configuration["FRONTEND_URL"] ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        .Select(origin => origin.TrimEnd('/')) // the browser's Origin header never has a trailing slash
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy => policy
+            .WithOrigins(allowedOrigins)
+            .AllowCredentials()
+            .WithMethods("GET", "POST", "PUT", "DELETE")
+            .WithHeaders("Content-Type", "Accept", "X-Requested-With", "Idempotency-Key")
+            // Lets the browser cache the preflight for 10 minutes instead of
+            // sending an OPTIONS before every single cross-origin call.
+            .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));
+    });
+
+    // Rate limiting (brief section 9): fixed window, partitioned per client
+    // IP — each IP gets its own 5-requests/minute bucket. Applied to
+    // Register/Login/Refresh via [EnableRateLimiting("auth")].
+    //
+    // The previous version used options.AddFixedWindowLimiter("auth", ...),
+    // which has NO partition key: it was one single shared bucket for the
+    // whole internet, so 5 login attempts from anyone locked everyone else
+    // out for the rest of the minute. AddPolicy + RateLimitPartition is the
+    // per-key form. Checkout gets its own policy once that endpoint exists
+    // (brief 7.4), partitioned per user id for authenticated callers.
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        options.AddFixedWindowLimiter("auth", limiterOptions =>
-        {
-            limiterOptions.Window = TimeSpan.FromMinutes(1);
-            limiterOptions.PermitLimit = 5;
-            limiterOptions.QueueLimit = 0;
-        });
+        options.AddPolicy("auth", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                // RemoteIpAddress is the real client IP only because
+                // UseForwardedHeaders runs first in the pipeline (see below);
+                // without it, every request on Render would share the
+                // proxy's IP and we'd be back to one global bucket.
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = 5,
+                    QueueLimit = 0
+                }));
+    });
+
+    // Render (and most PaaS hosts) terminate TLS at their edge proxy and
+    // forward plain HTTP to the container, adding X-Forwarded-For (client
+    // IP) and X-Forwarded-Proto (original scheme). Without honoring them,
+    // RemoteIpAddress is the proxy's IP (breaks per-IP rate limiting) and
+    // Request.Scheme is "http" (UseHttpsRedirection could redirect-loop).
+    // The known-proxy lists are cleared because Render doesn't publish a
+    // fixed proxy IP range — acceptable only because the container is not
+    // reachable except through that proxy. ForwardLimit stays at the
+    // default 1: only the hop added by the nearest proxy is trusted, so a
+    // client can't spoof its IP by sending its own X-Forwarded-For.
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
     });
 
     // Centralized error handling — see Middleware/GlobalExceptionHandler.cs.
@@ -117,6 +204,46 @@ try
     builder.Services.AddHealthChecks();
 
     var app = builder.Build();
+
+    if (allowedOrigins.Length == 0)
+        Log.Warning("CORS: no allowed origins configured (Cors:AllowedOrigins / FRONTEND_URL) — " +
+                    "every cross-origin browser request will be rejected.");
+    else
+        Log.Information("CORS: allowed origins {Origins}", allowedOrigins);
+
+    // One-shot maintenance modes — run, then exit without starting the web
+    // server. Never triggered by a normal start.
+    //   --migrate  applies pending EF Core migrations. The CD pipeline runs
+    //              the SAME Docker image with this flag before deploying it,
+    //              so schema and code always come from one build. Not done
+    //              on every startup: several instances booting at once
+    //              would race to migrate the same database.
+    //   --seed     loads the demo catalog (Infrastructure/Persistence/Seed).
+    // Both can be combined: `... --migrate --seed` (migrations run first).
+    var runMigrations = args.Contains("--migrate");
+    var runSeed = args.Contains("--seed");
+    if (runMigrations || runSeed)
+    {
+        using var scope = app.Services.CreateScope();
+
+        if (runMigrations)
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+            Log.Information("Applying {Count} pending migration(s): {Migrations}", pending.Count, pending);
+            await db.Database.MigrateAsync();
+            Log.Information("Database is up to date");
+        }
+
+        if (runSeed)
+            await scope.ServiceProvider.GetRequiredService<CatalogSeeder>().SeedAsync();
+
+        return;
+    }
+
+    // Must be first: everything below (rate limiter partitioning, HTTPS
+    // redirection, request logging) reads the client IP / scheme.
+    app.UseForwardedHeaders();
 
     app.UseExceptionHandler();
 
@@ -133,6 +260,17 @@ try
 
     app.UseHttpsRedirection();
 
+    // Before authentication/authorization, so a preflight (OPTIONS, which
+    // never carries cookies) is answered here instead of being 401'd.
+    app.UseCors();
+
+    // CSRF defense: state-changing requests must come from this API's own
+    // origin or a CORS-allowed origin (see Middleware/OriginValidationMiddleware.cs).
+    // After UseCors (preflights are answered there), before authentication.
+    // Cast to object: UseMiddleware takes params object[], and a bare
+    // string[] would be spread into one argument per origin.
+    app.UseMiddleware<OriginValidationMiddleware>((object)allowedOrigins);
+
     app.UseRateLimiter();
 
     app.UseAuthentication();
@@ -144,9 +282,14 @@ try
 
     app.Run();
 }
-catch (Exception ex)
+// HostAbortedException is thrown on purpose by design-time tools (dotnet ef)
+// after they grab the DbContext and stop the host — expected, not a crash.
+catch (Exception ex) when (ex is not HostAbortedException)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
+    // Non-zero exit code: without it a failed `--migrate` (or a crash at
+    // startup) ends with 0 and the CD pipeline would carry on and deploy.
+    Environment.ExitCode = 1;
 }
 finally
 {

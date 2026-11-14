@@ -49,3 +49,7 @@ logs/
 secrets.json
 appsettings.Local.json
 appsettings.*.local.json
+
+## Claude Code — personal files
+CLAUDE.local.md
+.claude/settings.local.json

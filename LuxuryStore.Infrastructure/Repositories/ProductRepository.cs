@@ -14,6 +14,11 @@ public class ProductRepository(AppDbContext context) : GenericRepository<Product
             .Include(p => p.Brand)
             .Include(p => p.Category)
             .Include(p => p.Variants)
+            .Include(p => p.Images)
+            // Two collection Includes in one SQL query would multiply rows
+            // (variants x images); split queries load each collection with
+            // its own round trip instead.
+            .AsSplitQuery()
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
     public async Task<Product?> GetBySlugWithDetailsAsync(string slug, CancellationToken cancellationToken = default) =>
@@ -22,6 +27,8 @@ public class ProductRepository(AppDbContext context) : GenericRepository<Product
             .Include(p => p.Brand)
             .Include(p => p.Category)
             .Include(p => p.Variants)
+            .Include(p => p.Images)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(p => p.Slug == slug, cancellationToken);
 
     public async Task<(IReadOnlyList<Product> Items, int TotalCount)> GetPagedAsync(
@@ -31,7 +38,14 @@ public class ProductRepository(AppDbContext context) : GenericRepository<Product
             .AsNoTracking()
             .Include(p => p.Brand)
             .Include(p => p.Category)
-            .Include(p => p.Variants)
+            // Listing cards only need the primary image, so a filtered
+            // Include loads one image per product instead of every gallery
+            // (and variants aren't loaded at all on the listing anymore).
+            // Same ordering as MappingExtensions.ToListItemDto.
+            .Include(p => p.Images
+                .OrderBy(i => i.VariantId.HasValue)
+                .ThenBy(i => i.SortOrder)
+                .Take(1))
             .Where(p => p.IsActive);
 
         if (query.BrandId is not null)
@@ -73,4 +87,18 @@ public class ProductRepository(AppDbContext context) : GenericRepository<Product
     public void UpdateVariant(ProductVariant variant) => Context.Set<ProductVariant>().Update(variant);
 
     public void RemoveVariant(ProductVariant variant) => Context.Set<ProductVariant>().Remove(variant);
+
+    public async Task<ProductImage?> GetImageAsync(Guid productId, Guid imageId, CancellationToken cancellationToken = default) =>
+        await Context.Set<ProductImage>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == imageId && i.ProductId == productId, cancellationToken);
+
+    public async Task<int?> GetMaxImageSortOrderAsync(Guid productId, CancellationToken cancellationToken = default) =>
+        await Context.Set<ProductImage>()
+            .Where(i => i.ProductId == productId)
+            .MaxAsync(i => (int?)i.SortOrder, cancellationToken);
+
+    public void AddImage(ProductImage image) => Context.Set<ProductImage>().Add(image);
+
+    public void RemoveImage(ProductImage image) => Context.Set<ProductImage>().Remove(image);
 }

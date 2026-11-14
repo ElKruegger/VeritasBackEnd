@@ -1,6 +1,6 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace LuxuryStore.Application.DTOs;
+
+// Validation rules: Validation/CatalogValidators.cs.
 
 public class ProductVariantDto
 {
@@ -15,35 +15,19 @@ public class ProductVariantDto
 
     public int StockQuantity { get; set; }
     public bool IsActive { get; set; }
-    public List<string> ImageUrls { get; set; } = [];
 }
 
 public class CreateProductVariantDto
 {
-    [Required, MaxLength(50)]
     public string Sku { get; set; } = string.Empty;
-
-    [Required, MaxLength(50)]
     public string VariantLabel { get; set; } = string.Empty;
-
-    [Range(0, double.MaxValue)]
     public decimal? PriceOverride { get; set; }
-
-    [Range(0, int.MaxValue)]
     public int StockQuantity { get; set; }
-
-    public List<string> ImageUrls { get; set; } = [];
 }
 
 public class UpdateProductVariantDto
 {
-    [Range(0, double.MaxValue)]
     public decimal? PriceOverride { get; set; }
-
-    [Range(0, int.MaxValue)]
     public int StockQuantity { get; set; }
-
     public bool IsActive { get; set; } = true;
-
-    public List<string> ImageUrls { get; set; } = [];
 }

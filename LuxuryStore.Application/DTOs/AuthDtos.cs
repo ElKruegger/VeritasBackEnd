@@ -1,28 +1,19 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace LuxuryStore.Application.DTOs;
+
+// Validation rules for these DTOs live in Validation/AuthValidators.cs
+// (FluentValidation, brief section 9) — not as attributes here.
 
 public class RegisterDto
 {
-    [Required, EmailAddress, MaxLength(256)]
     public string Email { get; set; } = string.Empty;
-
-    [Required, MinLength(8), MaxLength(100)]
     public string Password { get; set; } = string.Empty;
-
-    [Required, MaxLength(100)]
     public string FirstName { get; set; } = string.Empty;
-
-    [Required, MaxLength(100)]
     public string LastName { get; set; } = string.Empty;
 }
 
 public class LoginDto
 {
-    [Required, EmailAddress]
     public string Email { get; set; } = string.Empty;
-
-    [Required]
     public string Password { get; set; } = string.Empty;
 }
 
@@ -32,6 +23,11 @@ public class UserDto
     public string Email { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
+
+    // "Customer" or "Admin" — lets the frontend decide whether to show
+    // operator-only UI. Purely cosmetic on the client: every admin endpoint
+    // is still enforced server-side by the AdminOnly policy.
+    public string Role { get; set; } = string.Empty;
 }
 
 /// <summary>
