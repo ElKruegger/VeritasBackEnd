@@ -25,9 +25,16 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Connection string 'DefaultConnection' was not found. Set it via user-secrets locally " +
+        // IsNullOrWhiteSpace, not "?? throw": appsettings.json ships an empty
+        // "" placeholder, and an unset CI secret also arrives as "". Neither
+        // is null, so "??" let them through and Npgsql later failed with
+        // the unhelpful "The ConnectionString property has not been
+        // initialized" (seen on the first CD run). Same pattern as the
+        // Jwt:SigningKey check in Program.cs.
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException(
+                "Connection string 'DefaultConnection' was not found or is empty. Set it via user-secrets locally " +
                 "(dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"...\") or the " +
                 "ConnectionStrings__DefaultConnection environment variable in every other environment.");
 

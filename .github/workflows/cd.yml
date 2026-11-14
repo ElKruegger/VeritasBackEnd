@@ -104,6 +104,25 @@ jobs:
       packages: read
 
     steps:
+      # Fails in seconds with a readable message instead of pulling the
+      # whole image to find out. A secret that doesn't exist arrives as an
+      # empty string, and Npgsql doesn't accept the postgresql:// URI that
+      # Supabase shows by default — it needs Host=...;Port=...; pairs.
+      - name: Check the connection string secret
+        env:
+          CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+        run: |
+          if [ -z "$CONNECTION_STRING" ]; then
+            echo "::error title=Missing secret::SUPABASE_CONNECTION_STRING is not set in the 'production' environment."
+            exit 1
+          fi
+          case "$CONNECTION_STRING" in
+            postgres://*|postgresql://*)
+              echo "::error title=Wrong format::SUPABASE_CONNECTION_STRING is a URI. Use the Npgsql format: Host=...;Port=5432;Database=postgres;Username=...;Password=...;SSL Mode=Require (see README)."
+              exit 1
+              ;;
+          esac
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
