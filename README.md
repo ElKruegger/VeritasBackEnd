@@ -116,6 +116,47 @@ Every pull request into `developer` or `main`, and every push to those branches,
 
 Dependabot opens weekly pull requests for NuGet packages and GitHub Actions, and each of them goes through the same pipeline.
 
+## Continuous deployment
+
+When CI finishes green on a push to `main`, the [CD workflow](.github/workflows/cd.yml) runs:
+
+1. **Build** the Docker image once and push it to GitHub Container Registry as `ghcr.io/<owner>/veritas-api:sha-<commit>` (plus `latest`).
+2. **Migrate**: run that same image with `--migrate` against the production database. A failed migration exits non-zero and stops the pipeline.
+3. **Deploy**: call the Render deploy hook with `imgURL` set to that same image tag.
+
+The schema and the running code therefore always come from the same build. Pull requests never deploy.
+
+### One-time setup
+
+**GitHub** (Settings → Environments → `production`), environment secrets:
+
+| Secret | Value |
+|---|---|
+| `SUPABASE_CONNECTION_STRING` | Npgsql connection string for the Supabase **session pooler** (`Host=aws-0-<region>.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.<project-ref>;Password=...;SSL Mode=Require;Gss Encryption Mode=Disable`). The direct `db.<ref>.supabase.co` host is IPv6-only and unreachable from GitHub-hosted runners. |
+| `RENDER_DEPLOY_HOOK_URL` | Render service → Settings → Deploy Hook |
+
+Required reviewers can be added to the environment to make every production deploy wait for a manual approval.
+
+**GHCR**: after the first run, the `veritas-api` package appears under the owner's Packages. Either make it public, or add a registry credential in Render (GitHub username + a personal access token with `read:packages`).
+
+**Render**: create a *Web Service* from an *existing image* (`ghcr.io/<owner>/veritas-api:latest`), turn auto-deploy off (the pipeline deploys), and set:
+
+| Setting | Value |
+|---|---|
+| Health check path | `/health` |
+| `PORT` | `8080` |
+| `ConnectionStrings__DefaultConnection` | Same session-pooler connection string as above (the transaction pooler on port 6543 would require disabling Npgsql's prepared statements) |
+| `Jwt__SigningKey` | Random value, at least 32 bytes |
+| `FRONTEND_URL` | Deployed frontend origin(s), comma-separated |
+| `Storage__PublicBaseUrl` | Public URL of the `product-images` bucket |
+
+### Running it by hand
+
+```
+docker build -t veritas-api .
+docker run --rm -e ConnectionStrings__DefaultConnection="..." veritas-api --migrate
+```
+
 ## Configuration
 
 | Key | Environment variable | Purpose |
