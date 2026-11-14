@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Threading.RateLimiting;
 using LuxuryStore.Application;
 using LuxuryStore.Infrastructure;
+using LuxuryStore.Infrastructure.Persistence;
 using LuxuryStore.Infrastructure.Persistence.Seed;
 using LuxuryStore.Infrastructure.Security;
 using LuxuryStore_Backend.Authorization;
@@ -10,6 +11,7 @@ using LuxuryStore_Backend.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
@@ -209,13 +211,33 @@ try
     else
         Log.Information("CORS: allowed origins {Origins}", allowedOrigins);
 
-    // One-shot maintenance mode: `dotnet run --project LuxuryStore-Backend -- --seed`
-    // loads the demo catalog (Infrastructure/Persistence/Seed) and exits
-    // without starting the web server. Never runs on a normal start.
-    if (args.Contains("--seed"))
+    // One-shot maintenance modes — run, then exit without starting the web
+    // server. Never triggered by a normal start.
+    //   --migrate  applies pending EF Core migrations. The CD pipeline runs
+    //              the SAME Docker image with this flag before deploying it,
+    //              so schema and code always come from one build. Not done
+    //              on every startup: several instances booting at once
+    //              would race to migrate the same database.
+    //   --seed     loads the demo catalog (Infrastructure/Persistence/Seed).
+    // Both can be combined: `... --migrate --seed` (migrations run first).
+    var runMigrations = args.Contains("--migrate");
+    var runSeed = args.Contains("--seed");
+    if (runMigrations || runSeed)
     {
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<CatalogSeeder>().SeedAsync();
+
+        if (runMigrations)
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+            Log.Information("Applying {Count} pending migration(s): {Migrations}", pending.Count, pending);
+            await db.Database.MigrateAsync();
+            Log.Information("Database is up to date");
+        }
+
+        if (runSeed)
+            await scope.ServiceProvider.GetRequiredService<CatalogSeeder>().SeedAsync();
+
         return;
     }
 
@@ -265,6 +287,9 @@ try
 catch (Exception ex) when (ex is not HostAbortedException)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
+    // Non-zero exit code: without it a failed `--migrate` (or a crash at
+    // startup) ends with 0 and the CD pipeline would carry on and deploy.
+    Environment.ExitCode = 1;
 }
 finally
 {
