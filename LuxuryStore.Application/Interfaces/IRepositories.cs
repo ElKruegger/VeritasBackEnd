@@ -70,6 +70,13 @@ public interface IRefreshTokenRepository : IGenericRepository<RefreshToken>
     /// Returns how many tokens were revoked.
     /// </summary>
     Task<int> RevokeAllActiveForUserAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes every refresh token that expired before <paramref name="cutoff"/>,
+    /// revoked or not, in one DELETE statement (runs immediately, like
+    /// RevokeAllActiveForUserAsync). Returns how many rows were deleted.
+    /// </summary>
+    Task<int> DeleteExpiredAsync(DateTime cutoff, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
