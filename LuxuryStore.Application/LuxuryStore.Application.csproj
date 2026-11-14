@@ -20,12 +20,13 @@
          at >= 10.0.12 — a lower exact pin here is a package downgrade
          (NU1605, a build error since .NET 8's SDK). Floating (>=) rather
          than exact, so a future patch bump elsewhere doesn't reopen this. -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[10.0.12,)" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0" />
     <!-- IPasswordHasher<TUser>/PasswordHasher<TUser> only — the standalone
          hashing primitive, not the rest of ASP.NET Core Identity (no
          UserManager, no IdentityDbContext). AuthService depends on the
          interface; DependencyInjection.cs registers the concrete class. -->
-    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="11.0.0" />
     <!-- Request validation (brief section 9). The validators live here, next
          to the DTOs they validate; the API project only runs them (see
          LuxuryStore-Backend/Filters/FluentValidationFilter.cs).
