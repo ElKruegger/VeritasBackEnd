@@ -22,7 +22,11 @@ public class AuthService(
     public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken cancellationToken = default)
     {
         if (await unitOfWork.Users.EmailExistsAsync(dto.Email, cancellationToken: cancellationToken))
-            throw new ConflictException($"An account with email '{dto.Email}' already exists.");
+            // Still reveals that the email is registered — unavoidable until
+            // registration confirms by email ("check your inbox" for every
+            // address). Kept as small as possible meanwhile: the input is
+            // not echoed back, and the endpoint is rate-limited per IP.
+            throw new ConflictException("An account with this email already exists.");
 
         var user = new User
         {
@@ -38,19 +42,85 @@ public class AuthService(
         return await IssueTokensAsync(user, cancellationToken);
     }
 
+    /// <summary>
+    /// Account lockout: after this many consecutive wrong passwords, sign-in
+    /// is refused for LockoutDuration — even with the right password. The
+    /// per-IP rate limit alone doesn't stop a slow attack spread over many
+    /// IPs against one account; this does. Temporary on purpose: a permanent
+    /// lock would let anyone lock any customer out by typing wrong passwords.
+    /// </summary>
+    public const int MaxFailedLogins = 5;
+    public static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// The ONE message for every failed login: unknown email, wrong password
+    /// and locked account all look identical, so the login form can't be
+    /// used to find out which emails have an account (user enumeration).
+    /// </summary>
+    public const string InvalidCredentialsMessage =
+        "Invalid email or password. Repeated failed attempts temporarily block sign-in.";
+
     public async Task<AuthResultDto> LoginAsync(LoginDto dto, CancellationToken cancellationToken = default)
     {
-        var user = await unitOfWork.Users.GetByEmailAsync(dto.Email.Trim(), cancellationToken)
-            ?? throw new UnauthorizedException("Invalid email or password.");
+        var now = DateTime.UtcNow;
+        var user = await unitOfWork.Users.GetByEmailAsync(dto.Email.Trim(), cancellationToken);
 
-        if (!user.IsActive)
-            throw new UnauthorizedException("This account has been deactivated.");
+        // Unknown email or locked account: still run a full password hash
+        // before answering. Hashing is deliberately slow (PBKDF2), so
+        // skipping it would make these answers measurably faster than a
+        // wrong password — and the response time would leak what the
+        // message hides.
+        if (user is null || user.IsLockedOut(now))
+        {
+            VerifyAgainstDummyHash(dto.Password);
+            throw new UnauthorizedException(InvalidCredentialsMessage);
+        }
 
         var verification = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
         if (verification == PasswordVerificationResult.Failed)
-            throw new UnauthorizedException("Invalid email or password.");
+        {
+            await RecordFailedLoginAsync(user, now, cancellationToken);
+            throw new UnauthorizedException(InvalidCredentialsMessage);
+        }
+
+        // Only after the right password: before, this message told anyone
+        // typing a random password that the email exists (and is disabled).
+        if (!user.IsActive)
+            throw new UnauthorizedException("This account has been deactivated.");
+
+        if (user.FailedLoginCount > 0 || user.LockoutEndsAt is not null)
+        {
+            user.FailedLoginCount = 0;
+            user.LockoutEndsAt = null;
+            unitOfWork.Users.Update(user); // saved together with the new refresh token
+        }
 
         return await IssueTokensAsync(user, cancellationToken);
+    }
+
+    private async Task RecordFailedLoginAsync(User user, DateTime now, CancellationToken cancellationToken)
+    {
+        user.FailedLoginCount++;
+        if (user.FailedLoginCount >= MaxFailedLogins)
+        {
+            user.LockoutEndsAt = now.Add(LockoutDuration);
+            // Start counting again from zero once the lockout is over.
+            user.FailedLoginCount = 0;
+        }
+
+        unitOfWork.Users.Update(user);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    // A real hash of a random password, created once per process. Verifying
+    // against it costs exactly what verifying a real user's password costs.
+    private static readonly User DummyUser = new();
+    private static string? _dummyPasswordHash;
+
+    private void VerifyAgainstDummyHash(string password)
+    {
+        var hash = _dummyPasswordHash ??= passwordHasher.HashPassword(DummyUser, Guid.NewGuid().ToString());
+        passwordHasher.VerifyHashedPassword(DummyUser, hash, password);
     }
 
     public async Task<AuthResultDto> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default)

@@ -30,4 +30,13 @@ public class RefreshTokenRepository(AppDbContext context) : GenericRepository<Re
             .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > now)
             .ExecuteUpdateAsync(setters => setters.SetProperty(rt => rt.RevokedAt, now), cancellationToken);
     }
+
+    // Safe for reuse detection: a revoked token is only useful to detect a
+    // replay while it could still have worked. Once ExpiresAt has passed,
+    // a replayed copy is refused anyway ("Invalid refresh token"), so the
+    // row has nothing left to protect.
+    public async Task<int> DeleteExpiredAsync(DateTime cutoff, CancellationToken cancellationToken = default) =>
+        await DbSet
+            .Where(rt => rt.ExpiresAt < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
 }

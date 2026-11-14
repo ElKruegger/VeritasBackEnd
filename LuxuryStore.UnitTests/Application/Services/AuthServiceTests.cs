@@ -38,7 +38,7 @@ public class AuthServiceTests
         _sut = new AuthService(_unitOfWork, _hasher, _tokens);
     }
 
-    private User ExistingUser(bool isActive = true)
+    private User ExistingUser(bool isActive = true, int failedLogins = 0, DateTime? lockoutEndsAt = null)
     {
         var user = new User
         {
@@ -46,6 +46,8 @@ public class AuthServiceTests
             FirstName = "Erick",
             LastName = "Krug",
             IsActive = isActive,
+            FailedLoginCount = failedLogins,
+            LockoutEndsAt = lockoutEndsAt,
             Role = UserRole.Customer
         };
         user.PasswordHash = _hasher.HashPassword(user, Password);
@@ -118,7 +120,7 @@ public class AuthServiceTests
 
         var ex = await Should.ThrowAsync<UnauthorizedException>(() => _sut.LoginAsync(dto, Ct));
 
-        ex.Message.ShouldBe("Invalid email or password.");
+        ex.Message.ShouldBe(AuthService.InvalidCredentialsMessage);
     }
 
     [Fact]
@@ -129,6 +131,113 @@ public class AuthServiceTests
 
         await Should.ThrowAsync<UnauthorizedException>(() => _sut.LoginAsync(dto, Ct));
         await _refreshTokens.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+    }
+
+    // --- Lockout and user enumeration -------------------------------------
+
+    [Fact]
+    public async Task A_wrong_password_counts_one_failed_attempt()
+    {
+        var user = ExistingUser();
+        var dto = new LoginDto { Email = "erick@example.com", Password = "WrongPassword1" };
+
+        await Should.ThrowAsync<UnauthorizedException>(() => _sut.LoginAsync(dto, Ct));
+
+        user.FailedLoginCount.ShouldBe(1);
+        user.LockoutEndsAt.ShouldBeNull();
+        _users.Received(1).Update(user);
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task The_fifth_consecutive_wrong_password_locks_the_account_for_15_minutes()
+    {
+        var user = ExistingUser(failedLogins: AuthService.MaxFailedLogins - 1);
+        var dto = new LoginDto { Email = "erick@example.com", Password = "WrongPassword1" };
+        var before = DateTime.UtcNow;
+
+        await Should.ThrowAsync<UnauthorizedException>(() => _sut.LoginAsync(dto, Ct));
+
+        user.LockoutEndsAt.ShouldNotBeNull();
+        user.LockoutEndsAt.Value.ShouldBeInRange(before + AuthService.LockoutDuration, DateTime.UtcNow + AuthService.LockoutDuration);
+        user.FailedLoginCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_locked_account_is_refused_even_with_the_right_password()
+    {
+        ExistingUser(lockoutEndsAt: DateTime.UtcNow.AddMinutes(10));
+        var dto = new LoginDto { Email = "erick@example.com", Password = Password };
+
+        var ex = await Should.ThrowAsync<UnauthorizedException>(() => _sut.LoginAsync(dto, Ct));
+
+        ex.Message.ShouldBe(AuthService.InvalidCredentialsMessage);
+        await _refreshTokens.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Logging_in_after_the_lockout_expired_succeeds_and_resets_the_counter()
+    {
+        var user = ExistingUser(failedLogins: 3, lockoutEndsAt: DateTime.UtcNow.AddMinutes(-1));
+        var dto = new LoginDto { Email = "erick@example.com", Password = Password };
+
+        await _sut.LoginAsync(dto, Ct);
+
+        user.FailedLoginCount.ShouldBe(0);
+        user.LockoutEndsAt.ShouldBeNull();
+        _users.Received(1).Update(user);
+    }
+
+    [Fact]
+    public async Task A_successful_login_without_previous_failures_does_not_rewrite_the_user()
+    {
+        ExistingUser();
+        var dto = new LoginDto { Email = "erick@example.com", Password = Password };
+
+        await _sut.LoginAsync(dto, Ct);
+
+        _users.DidNotReceive().Update(Arg.Any<User>());
+    }
+
+    [Fact]
+    public async Task Unknown_email_wrong_password_and_locked_account_all_get_the_same_error()
+    {
+        var unknown = await Should.ThrowAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginDto { Email = "nobody@example.com", Password = Password }, Ct));
+
+        ExistingUser();
+        var wrongPassword = await Should.ThrowAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginDto { Email = "erick@example.com", Password = "WrongPassword1" }, Ct));
+
+        ExistingUser(lockoutEndsAt: DateTime.UtcNow.AddMinutes(10));
+        var locked = await Should.ThrowAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginDto { Email = "erick@example.com", Password = Password }, Ct));
+
+        unknown.Message.ShouldBe(AuthService.InvalidCredentialsMessage);
+        wrongPassword.Message.ShouldBe(unknown.Message);
+        locked.Message.ShouldBe(unknown.Message);
+    }
+
+    [Fact]
+    public async Task A_deactivated_account_with_a_wrong_password_does_not_reveal_that_it_is_deactivated()
+    {
+        ExistingUser(isActive: false);
+        var dto = new LoginDto { Email = "erick@example.com", Password = "WrongPassword1" };
+
+        var ex = await Should.ThrowAsync<UnauthorizedException>(() => _sut.LoginAsync(dto, Ct));
+
+        ex.Message.ShouldBe(AuthService.InvalidCredentialsMessage);
+    }
+
+    [Fact]
+    public async Task Register_conflict_does_not_echo_the_email_back()
+    {
+        _users.EmailExistsAsync("erick@example.com", Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(true);
+        var dto = new RegisterDto { Email = "erick@example.com", Password = Password, FirstName = "E", LastName = "K" };
+
+        var ex = await Should.ThrowAsync<ConflictException>(() => _sut.RegisterAsync(dto, Ct));
+
+        ex.Message.ShouldNotContain("erick@example.com");
     }
 
     [Fact]
