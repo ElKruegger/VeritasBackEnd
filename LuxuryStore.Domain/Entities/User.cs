@@ -21,6 +21,14 @@ public class User : BaseEntity
     // account becomes Admin. Issued as the "role" claim of the access token.
     public UserRole Role { get; set; } = UserRole.Customer;
 
+    // Account lockout (see AuthService.LoginAsync): consecutive wrong
+    // passwords since the last successful login, and until when sign-in is
+    // refused after too many of them. Null = not locked.
+    public int FailedLoginCount { get; set; }
+    public DateTime? LockoutEndsAt { get; set; }
+
+    public bool IsLockedOut(DateTime utcNow) => LockoutEndsAt is not null && LockoutEndsAt > utcNow;
+
     public ICollection<Address> Addresses { get; set; } = new List<Address>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

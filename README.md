@@ -192,6 +192,10 @@ Errors use RFC 9457 Problem Details. Validation failures return `400` with an `e
 - Authentication endpoints are rate-limited per client IP.
 - Row Level Security is enabled on every table so that Supabase's auto-generated Data API cannot read or write application data. Every migration that creates a table must also enable RLS on it.
 - CORS is restricted to the configured frontend origins.
+- After 5 consecutive wrong passwords an account is locked for 15 minutes. The lock is temporary on purpose, so nobody can lock a customer out permanently.
+- Every failed login (unknown email, wrong password, locked account) returns the same message and takes the same time (a dummy password hash is verified for unknown emails), so the login form cannot be used to discover registered emails. A deactivated account is only reported after the correct password. Registration still answers 409 for a taken email until email confirmation exists.
+- Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a `Content-Security-Policy` that forbids loading anything and being framed, `Referrer-Policy: no-referrer` and a restrictive `Permissions-Policy`; the `Server` header is removed. Outside Development, HTTPS responses also carry `Strict-Transport-Security` (1 year).
+- Expired refresh tokens are deleted by a background job every 6 hours.
 
 ### Granting admin access
 

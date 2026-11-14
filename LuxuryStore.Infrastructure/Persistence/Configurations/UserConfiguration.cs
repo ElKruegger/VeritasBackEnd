@@ -30,5 +30,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         // no need for a separate NormalizedEmail column like full ASP.NET
         // Core Identity uses.
         builder.HasIndex(u => u.Email).IsUnique();
+
+        // Existing rows start unlocked with no failed attempts.
+        builder.Property(u => u.FailedLoginCount).IsRequired().HasDefaultValue(0);
+        builder.Property(u => u.LockoutEndsAt);
     }
 }

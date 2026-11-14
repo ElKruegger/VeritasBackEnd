@@ -27,6 +27,10 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    // No "Server: Kestrel" header: it tells an attacker which stack to
+    // target and gives the client nothing useful.
+    builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
     // Reads the "Serilog" section from appsettings — see brief section 3
     // ("structured logging, excluding sensitive payment data from logs").
     // ReadFrom.Services lets sinks/enrichers registered in DI participate,
@@ -203,6 +207,21 @@ try
 
     builder.Services.AddHealthChecks();
 
+    // HSTS: once a browser has seen this header over HTTPS, it refuses to
+    // talk to this host over plain HTTP for MaxAge — an attacker on the
+    // network (public Wi-Fi) can no longer downgrade the connection and
+    // read the auth cookies. Sent by app.UseHsts() below, outside
+    // Development only. No "preload": that is a one-way list for a domain
+    // we own, and onrender.com isn't ours.
+    builder.Services.AddHsts(options =>
+    {
+        options.MaxAge = TimeSpan.FromDays(365);
+        options.IncludeSubDomains = true;
+    });
+
+    // Deletes expired refresh tokens every few hours (see the class).
+    builder.Services.AddHostedService<LuxuryStore_Backend.BackgroundServices.RefreshTokenCleanupService>();
+
     var app = builder.Build();
 
     if (allowedOrigins.Length == 0)
@@ -245,6 +264,10 @@ try
     // redirection, request logging) reads the client IP / scheme.
     app.UseForwardedHeaders();
 
+    // Right after the forwarded headers, so every response — including the
+    // error responses produced by UseExceptionHandler — carries them.
+    app.UseSecurityHeaders();
+
     app.UseExceptionHandler();
 
     // Structured per-request logs (method, path, status, elapsed) without a
@@ -257,6 +280,11 @@ try
         app.MapOpenApi();
         app.MapScalarApiReference(); // Test UI at /scalar — replaces the old Swagger UI in .NET 10.
     }
+
+    // Not in Development: HSTS on localhost would make the browser refuse
+    // http://localhost for a year, for every local project.
+    if (!app.Environment.IsDevelopment())
+        app.UseHsts();
 
     app.UseHttpsRedirection();
 

@@ -25,6 +25,7 @@
     <ProjectReference Include="..\LuxuryStore.Domain\LuxuryStore.Domain.csproj" />
     <ProjectReference Include="..\LuxuryStore.Application\LuxuryStore.Application.csproj" />
     <ProjectReference Include="..\LuxuryStore.Infrastructure\LuxuryStore.Infrastructure.csproj" />
+    <ProjectReference Include="..\LuxuryStore-Backend\LuxuryStore-Backend.csproj" />
   </ItemGroup>
 
   <ItemGroup>
