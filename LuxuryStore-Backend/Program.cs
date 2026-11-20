@@ -6,6 +6,7 @@ using LuxuryStore.Infrastructure.Persistence;
 using LuxuryStore.Infrastructure.Persistence.Seed;
 using LuxuryStore.Infrastructure.Security;
 using LuxuryStore_Backend.Authorization;
+using LuxuryStore_Backend.Contract;
 using LuxuryStore_Backend.Filters;
 using LuxuryStore_Backend.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -43,10 +44,18 @@ try
     // Add services to the container.
     // FluentValidationFilter runs the Application layer's validators for
     // every action argument (brief section 9) — see Filters/FluentValidationFilter.cs.
-    builder.Services.AddControllers(options => options.Filters.Add<FluentValidationFilter>());
+    builder.Services.AddControllers(options => options.Filters.Add<FluentValidationFilter>())
+        .AddJsonOptions(options => ApiJson.Configure(options.JsonSerializerOptions));
 
-    // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-    builder.Services.AddOpenApi();
+    // The OpenAPI generator reads the minimal-API JSON options, not the
+    // controllers' ones above: both get the same rules, or the document
+    // would describe a different API than the one that answers.
+    builder.Services.ConfigureHttpJsonOptions(options => ApiJson.Configure(options.SerializerOptions));
+
+    // The document is the contract the frontend generates its TypeScript
+    // types from (openapi-typescript), so it has to be exact.
+    builder.Services.AddOpenApi(options =>
+        options.AddSchemaTransformer<RequiredPropertiesSchemaTransformer>());
 
     // Each layer registers its own services behind one extension method
     // (AddApplication / AddInfrastructure) — Program.cs stays a short,
