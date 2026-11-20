@@ -22,6 +22,32 @@ public class ProductService(IUnitOfWork unitOfWork, IImageUrlResolver imageUrls)
         };
     }
 
+    public async Task<ProductFiltersDto> GetFiltersAsync(ProductFilterQuery query, CancellationToken cancellationToken = default)
+    {
+        var facets = await unitOfWork.Products.GetFacetsAsync(query, cancellationToken);
+
+        return new ProductFiltersDto
+        {
+            Brands = facets.Brands.Select(b => b.ToDto()).ToList(),
+            Sizes = facets.Sizes.Order(NaturalStringComparer.Instance).ToList(),
+            MinPrice = facets.MinPrice,
+            MaxPrice = facets.MaxPrice
+        };
+    }
+
+    public async Task<IReadOnlyList<ProductListItemDto>> GetRelatedAsync(Guid id, RelatedProductsQuery query, CancellationToken cancellationToken = default)
+    {
+        var product = await unitOfWork.Products.GetByIdAsync(id, cancellationToken);
+
+        // An inactive product is treated as missing, same as the storefront
+        // listing: it must not be discoverable through its "related" block.
+        if (product is null || !product.IsActive)
+            throw new NotFoundException($"Product '{id}' was not found.");
+
+        var related = await unitOfWork.Products.GetRelatedAsync(product, query.Limit, cancellationToken);
+        return related.Select(p => p.ToListItemDto(imageUrls)).ToList();
+    }
+
     public async Task<ProductDto> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var product = await unitOfWork.Products.GetByIdWithDetailsAsync(id, cancellationToken)

@@ -83,9 +83,10 @@ public static class MappingExtensions
             .ToList()
     };
 
-    // Lightweight shape for catalog grids — expects Brand, Category and the
-    // primary image to be loaded (IProductRepository.GetPagedAsync loads
-    // only the first image per product, not the whole gallery).
+    // Lightweight shape for catalog grids — expects Brand, Category, the
+    // primary image and the in-stock variants to be loaded (the listing
+    // queries of IProductRepository load only the first image and at most
+    // one in-stock variant per product).
     public static ProductListItemDto ToListItemDto(this Product product, IImageUrlResolver urls)
     {
         var primary = product.Images
@@ -102,7 +103,10 @@ public static class MappingExtensions
             BrandName = product.Brand.Name,
             CategoryName = product.Category.Name,
             PrimaryImageUrl = primary is null ? null : urls.Resolve(primary.Path, primary.AltText),
-            PrimaryImageAltText = primary?.AltText
+            PrimaryImageAltText = primary?.AltText,
+            // The listing queries load at most one in-stock variant per
+            // product, so "any loaded variant that is buyable" is the answer.
+            InStock = product.Variants.Any(v => v.IsActive && v.StockQuantity > 0)
         };
     }
 

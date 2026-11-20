@@ -56,4 +56,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
   </ItemGroup>
 
+  <!-- Lets the unit tests check how internal query building is translated
+       to SQL (see ProductRepositoryQueryTests) without making it public. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="LuxuryStore.UnitTests" />
+  </ItemGroup>
+
 </Project>

@@ -27,6 +27,30 @@ public class ProductsController(IProductService productService) : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Filter sidebar of a catalog page: brands, sizes and price range that
+    /// actually exist for the given category/brand/search.
+    /// </summary>
+    [HttpGet("filters")]
+    [ProducesResponseType<ProductFiltersDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ProductFiltersDto>> GetFilters(
+        [FromQuery] ProductFilterQuery query, CancellationToken cancellationToken)
+    {
+        return Ok(await productService.GetFiltersAsync(query, cancellationToken));
+    }
+
+    /// <summary>"You may also like": same category, same brand first.</summary>
+    [HttpGet("{id:guid}/related")]
+    [ProducesResponseType<IReadOnlyList<ProductListItemDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<ProductListItemDto>>> GetRelated(
+        Guid id, [FromQuery] RelatedProductsQuery query, CancellationToken cancellationToken)
+    {
+        return Ok(await productService.GetRelatedAsync(id, query, cancellationToken));
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType<ProductDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

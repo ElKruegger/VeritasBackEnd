@@ -30,6 +30,8 @@ public interface ICategoryService
 public interface IProductService
 {
     Task<PagedResult<ProductListItemDto>> GetPagedAsync(ProductQueryParams query, CancellationToken cancellationToken = default);
+    Task<ProductFiltersDto> GetFiltersAsync(ProductFilterQuery query, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ProductListItemDto>> GetRelatedAsync(Guid id, RelatedProductsQuery query, CancellationToken cancellationToken = default);
     Task<ProductDto> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ProductDto> GetBySlugAsync(string slug, CancellationToken cancellationToken = default);
     Task<ProductDto> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default);
