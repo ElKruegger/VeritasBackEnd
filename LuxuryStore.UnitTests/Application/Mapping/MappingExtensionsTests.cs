@@ -84,4 +84,24 @@ public class MappingExtensionsTests
 
         user.ToDto().Role.ShouldBe("Admin");
     }
+
+
+    [Fact]
+    public void A_listing_item_is_in_stock_when_an_active_variant_has_stock()
+    {
+        var product = ProductWithGraph();
+        product.Variants.Add(new ProductVariant { Sku = "A", IsActive = true, StockQuantity = 2 });
+
+        product.ToListItemDto(_urls).InStock.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_listing_item_is_sold_out_when_only_empty_or_inactive_variants_exist()
+    {
+        var product = ProductWithGraph();
+        product.Variants.Add(new ProductVariant { Sku = "A", IsActive = true, StockQuantity = 0 });
+        product.Variants.Add(new ProductVariant { Sku = "B", IsActive = false, StockQuantity = 5 });
+
+        product.ToListItemDto(_urls).InStock.ShouldBeFalse();
+    }
 }

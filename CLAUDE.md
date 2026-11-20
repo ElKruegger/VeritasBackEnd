@@ -8,17 +8,16 @@ Véritas is a portfolio-grade luxury menswear and lifestyle e-commerce platform 
 Stack: ASP.NET Core Web API on .NET 10 (this repo) · React + TypeScript + Vite + Tailwind + Zustand frontend (not started, separate repo) · PostgreSQL on Supabase · Supabase Storage for product images · Stripe Checkout (planned) · MailKit SMTP (planned) · Docker image deployed to Render · frontend on Vercel · GitHub Actions for CI/CD.
 
 ## Current state
-Done: catalog (brands, categories, products, variants, images) with filters and paging · auth (register, login, refresh-token rotation with reuse detection, logout, me) in httpOnly cookies · roles (`Customer`/`Admin`) with an `AdminOnly` policy on every catalog write · FluentValidation · CORS · CSRF origin validation · rate limiting on auth · Serilog · RLS on every table · idempotent demo seed (27 products) · 87 unit tests · CI workflow · Dockerfile + docker-compose.
+Done: catalog (brands, categories, products, variants, images) with filters, size/in-stock filter, sorting, filter facets, related products and paging · auth (register, login, refresh-token rotation with reuse detection, logout, me) in httpOnly cookies · roles (`Customer`/`Admin`) with an `AdminOnly` policy on every catalog write · FluentValidation · CORS · CSRF origin validation · rate limiting on auth · Serilog · RLS on every table · idempotent demo seed (27 products) · security headers + HSTS · account lockout (5 failures → 15 min) · login user-enumeration hardening · background purge of expired refresh tokens · 128 unit tests · CI workflow · Dockerfile + docker-compose · CD workflow (GHCR image → `--migrate` on Supabase → Render deploy hook), proven on main.
 
-In progress: CD to Render (branch `feature_VeritasDockerCD`).
+Not set up yet: the Render service and the `RENDER_DEPLOY_HOOK_URL` secret — until then the CD deploy job is skipped with a warning.
 
 Roadmap, in order:
-1. CD: GitHub Actions builds the Docker image, runs it with `--migrate` against Supabase, then triggers the Render deploy. Deploy on merge to `main` only.
-2. Catalog gaps for the frontend: size/variant filter, related products, sort options.
-3. Address endpoints → Cart (guest cart merges on login, server-side totals) → Orders + Stripe Checkout (webhook with signature verification, idempotency key, checkout rate limit) → order history → password reset via email.
-4. Integration tests (WebApplicationFactory + Testcontainers PostgreSQL).
-5. Later: Redis (HybridCache for the catalog, idempotency keys), RabbitMQ with the Outbox pattern and a Node.js worker for order emails.
-Open security backlog: security headers (HSTS, nosniff, frame-ancestors), account lockout, user-enumeration hardening, purge of expired refresh tokens, least-privilege DB role.
+1. Decide the cookie strategy before frontend login: cross-site cookies (Vercel ↔ Render) are blocked by Safari/iOS. Preferred: Vercel rewrites `/api/*` to Render so the API is same-origin, then cookies can move to `SameSite=Lax`.
+2. Address endpoints → Cart (guest cart merges on login, server-side totals) → Orders + Stripe Checkout (webhook with signature verification, idempotency key, checkout rate limit) → order history → password reset via email.
+3. Integration tests (WebApplicationFactory + Testcontainers PostgreSQL).
+4. Later: Redis (HybridCache for the catalog, idempotency keys), RabbitMQ with the Outbox pattern and a Node.js worker for order emails.
+Open security backlog: least-privilege DB role (the API connects as `postgres`), registration still answers 409 for a taken email (fixed by email confirmation in step 2).
 
 ## Layout (Clean Architecture — dependencies point inwards only)
 - `LuxuryStore.Domain` — entities (`BaseEntity` gives Id/CreatedAt/UpdatedAt), enums. No packages.

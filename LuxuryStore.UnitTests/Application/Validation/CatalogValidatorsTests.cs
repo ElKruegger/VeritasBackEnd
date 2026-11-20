@@ -197,4 +197,55 @@ public class ProductQueryParamsValidatorTests
 
         _validator.TestValidate(query).ShouldHaveValidationErrorFor(x => x.MaxPrice);
     }
+
+    [Fact]
+    public void An_unknown_sort_value_is_rejected()
+    {
+        _validator.TestValidate(new ProductQueryParams { Sort = (ProductSort)99 })
+            .ShouldHaveValidationErrorFor(x => x.Sort);
+    }
+
+    [Fact]
+    public void More_than_20_sizes_are_rejected()
+    {
+        var query = new ProductQueryParams { Sizes = Enumerable.Range(1, 21).Select(i => $"EU {i}").ToList() };
+
+        _validator.TestValidate(query).ShouldHaveValidationErrorFor(x => x.Sizes);
+    }
+
+    [Fact]
+    public void A_size_longer_than_the_variant_label_column_is_rejected()
+    {
+        var query = new ProductQueryParams { Sizes = [new string('x', 51)] };
+
+        _validator.TestValidate(query).ShouldHaveValidationErrorFor("Sizes[0]");
+    }
+
+    [Fact]
+    public void Sizes_with_in_stock_and_a_sort_pass()
+    {
+        var query = new ProductQueryParams { Sizes = ["UK 8", "UK 9"], InStock = true, Sort = ProductSort.PriceDesc };
+
+        _validator.TestValidate(query).ShouldNotHaveAnyValidationErrors();
+    }
+}
+
+public class RelatedProductsQueryValidatorTests
+{
+    private readonly RelatedProductsQueryValidator _validator = new();
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(13)]
+    public void A_limit_outside_1_to_12_is_rejected(int limit)
+    {
+        _validator.TestValidate(new RelatedProductsQuery { Limit = limit })
+            .ShouldHaveValidationErrorFor(x => x.Limit);
+    }
+
+    [Fact]
+    public void The_default_limit_passes()
+    {
+        _validator.TestValidate(new RelatedProductsQuery()).ShouldNotHaveAnyValidationErrors();
+    }
 }
