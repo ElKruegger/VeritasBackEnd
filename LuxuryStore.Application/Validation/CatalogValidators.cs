@@ -154,5 +154,29 @@ public class ProductQueryParamsValidator : AbstractValidator<ProductQueryParams>
             .WithMessage("Maximum price must be greater than or equal to the minimum price.");
 
         RuleFor(x => x.Search).MaximumLength(100);
+
+        RuleFor(x => x.Sort).IsInEnum();
+
+        // Bounded so a crafted URL can't turn into a huge IN (...) list.
+        RuleFor(x => x.Sizes)
+            .Must(sizes => sizes is null || sizes.Count <= 20)
+            .WithMessage("At most 20 sizes can be selected.");
+        RuleForEach(x => x.Sizes).NotEmpty().MaximumLength(50); // = ProductVariants.VariantLabel
+    }
+}
+
+public class ProductFilterQueryValidator : AbstractValidator<ProductFilterQuery>
+{
+    public ProductFilterQueryValidator()
+    {
+        RuleFor(x => x.Search).MaximumLength(100);
+    }
+}
+
+public class RelatedProductsQueryValidator : AbstractValidator<RelatedProductsQuery>
+{
+    public RelatedProductsQueryValidator()
+    {
+        RuleFor(x => x.Limit).InclusiveBetween(1, 12);
     }
 }

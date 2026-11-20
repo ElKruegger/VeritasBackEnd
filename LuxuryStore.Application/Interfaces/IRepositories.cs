@@ -37,6 +37,18 @@ public interface IProductRepository : IGenericRepository<Product>
     Task<(IReadOnlyList<Product> Items, int TotalCount)> GetPagedAsync(ProductQueryParams query, CancellationToken cancellationToken = default);
     Task<bool> SlugExistsAsync(string slug, Guid? excludeId = null, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Raw filter values of a catalog slice (active products only). Sizes
+    /// come back unsorted — ordering them for display is ProductService's job.
+    /// </summary>
+    Task<ProductFacets> GetFacetsAsync(ProductFilterQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Active products of the same category, excluding the product itself:
+    /// same brand first, then newest. Loaded like GetPagedAsync items.
+    /// </summary>
+    Task<IReadOnlyList<Product>> GetRelatedAsync(Product product, int limit, CancellationToken cancellationToken = default);
+
     // Variants aren't their own aggregate (nothing ever queries a variant
     // outside the context of a product), so they're reached through the
     // product repository rather than getting an IProductVariantRepository.
@@ -51,6 +63,13 @@ public interface IProductRepository : IGenericRepository<Product>
     void AddImage(ProductImage image);
     void RemoveImage(ProductImage image);
 }
+
+/// <summary>Result of IProductRepository.GetFacetsAsync.</summary>
+public sealed record ProductFacets(
+    IReadOnlyList<Brand> Brands,
+    IReadOnlyList<string> Sizes,
+    decimal? MinPrice,
+    decimal? MaxPrice);
 
 public interface IUserRepository : IGenericRepository<User>
 {

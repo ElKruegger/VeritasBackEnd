@@ -179,11 +179,28 @@ All routes are versioned under `/api/v1`.
 | Auth | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me` | Public (rate-limited) / authenticated for `me` |
 | Brands | `GET /brands`, `GET /brands/{id}` · `POST`, `PUT`, `DELETE` | Reads public · writes `Admin` |
 | Categories | `GET /categories`, `GET /categories/{id}` · `POST`, `PUT`, `DELETE` | Reads public · writes `Admin` |
-| Products | `GET /products` (filters: `brandId`, `categoryId`, `minPrice`, `maxPrice`, `search`, paging), `GET /products/{id}`, `GET /products/slug/{slug}` · `POST`, `PUT`, `DELETE` | Reads public · writes `Admin` |
+| Products | `GET /products` (filters: `brandId`, `categoryId`, `minPrice`, `maxPrice`, `search`, `sizes`, `inStock`; `sort`; paging), `GET /products/filters`, `GET /products/{id}/related`, `GET /products/{id}`, `GET /products/slug/{slug}` · `POST`, `PUT`, `DELETE` | Reads public · writes `Admin` |
 | Variants | `POST /products/{id}/variants`, `PUT`/`DELETE /products/{id}/variants/{variantId}` | `Admin` |
 | Images | `POST /products/{id}/images`, `DELETE /products/{id}/images/{imageId}` | `Admin` |
 
 Errors use RFC 9457 Problem Details. Validation failures return `400` with an `errors` dictionary keyed by property name.
+
+### Catalog browsing
+
+```
+GET /api/v1/products?categoryId=...&sort=priceAsc&sizes=UK 8&sizes=UK 9&inStock=true&search=oxford
+```
+
+- `sort`: `name` (default), `priceAsc`, `priceDesc`, `newest`. Every order ends with the product id, so paging is stable.
+- `sizes`: variant labels as returned by `/products/filters`; repeat the parameter for several (max 20). A product matches when it has an active variant in one of them.
+- `inStock`: only products with an active variant in stock — in one of the requested sizes when `sizes` is set.
+- `search`: matches the product name or the brand name, case-insensitive; `%` and `_` are searched literally.
+- Every listing item has `inStock`, so the grid can show a sold-out badge.
+- Price filters and price sorting use the product's `basePrice`, not variant price overrides.
+
+`GET /api/v1/products/filters?categoryId=&brandId=&search=` returns what can be filtered on in that slice: `brands` (ignoring `brandId`, so the other brands stay selectable), `sizes` in natural order (`UK 7` before `UK 10`) and the `minPrice`/`maxPrice` range.
+
+`GET /api/v1/products/{id}/related?limit=4` returns up to `limit` (1–12) active products of the same category, same brand first, then newest; `404` for an unknown or inactive product.
 
 ## Security notes
 

@@ -114,4 +114,71 @@ public class ProductServiceTests
         await Should.ThrowAsync<NotFoundException>(() => _sut.RemoveImageAsync(_product.Id, Guid.NewGuid(), Ct));
         _products.DidNotReceive().RemoveImage(Arg.Any<ProductImage>());
     }
+
+    // --- Related products -------------------------------------------------
+
+    [Fact]
+    public async Task Related_products_of_an_unknown_product_throws_not_found()
+    {
+        await Should.ThrowAsync<NotFoundException>(() =>
+            _sut.GetRelatedAsync(Guid.NewGuid(), new RelatedProductsQuery(), Ct));
+    }
+
+    [Fact]
+    public async Task Related_products_of_an_inactive_product_throws_not_found()
+    {
+        _product.IsActive = false;
+
+        await Should.ThrowAsync<NotFoundException>(() =>
+            _sut.GetRelatedAsync(_product.Id, new RelatedProductsQuery(), Ct));
+        await _products.DidNotReceive().GetRelatedAsync(Arg.Any<Product>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Related_products_are_requested_with_the_given_limit_and_mapped_to_listing_items()
+    {
+        var related = new Product
+        {
+            Name = "Explorer 40 mm",
+            Slug = "rolex-explorer",
+            Brand = new Brand { Name = "Rolex" },
+            Category = new Category { Name = "Watches" }
+        };
+        _products.GetRelatedAsync(_product, 6, Arg.Any<CancellationToken>()).Returns([related]);
+
+        var result = await _sut.GetRelatedAsync(_product.Id, new RelatedProductsQuery { Limit = 6 }, Ct);
+
+        result.Single().Slug.ShouldBe("rolex-explorer");
+        result.Single().BrandName.ShouldBe("Rolex");
+    }
+
+    // --- Filters ----------------------------------------------------------
+
+    [Fact]
+    public async Task Filter_sizes_come_back_in_natural_order()
+    {
+        var query = new ProductFilterQuery();
+        _products.GetFacetsAsync(query, Arg.Any<CancellationToken>())
+            .Returns(new ProductFacets([], ["UK 10", "UK 7", "UK 9", "UK 8"], 650m, 1890m));
+
+        var result = await _sut.GetFiltersAsync(query, Ct);
+
+        result.Sizes.ShouldBe(["UK 7", "UK 8", "UK 9", "UK 10"]);
+        result.MinPrice.ShouldBe(650m);
+        result.MaxPrice.ShouldBe(1890m);
+    }
+
+    [Fact]
+    public async Task Filter_brands_are_mapped_to_dtos()
+    {
+        var query = new ProductFilterQuery();
+        var brand = new Brand { Name = "Crockett & Jones", Slug = "crockett-jones", IsActive = true };
+        _products.GetFacetsAsync(query, Arg.Any<CancellationToken>())
+            .Returns(new ProductFacets([brand], [], null, null));
+
+        var result = await _sut.GetFiltersAsync(query, Ct);
+
+        result.Brands.Single().Slug.ShouldBe("crockett-jones");
+        result.MinPrice.ShouldBeNull();
+    }
 }
