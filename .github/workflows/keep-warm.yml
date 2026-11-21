@@ -1,0 +1,41 @@
+# Keeps the deployed API awake.
+#
+# Render's free instances sleep after 15 minutes without traffic, and the
+# first request after that waits 30-60 seconds for the container to start,
+# longer than the storefront waits for the API. A request every 10 minutes
+# keeps the instance up (one always-on service fits in the free monthly
+# hours). It reads the categories rather than /health so the database is
+# used too: Supabase pauses free projects after a week without activity.
+#
+# Scheduled workflows only run from the default branch (main), and GitHub
+# may start them a few minutes late under load. Free for public repositories.
+#
+# Required setup: repository variable API_PUBLIC_URL (Settings > Secrets and
+# variables > Actions > Variables), e.g. https://veritas-api.onrender.com.
+# Without it the job does nothing.
+
+name: Keep API warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    name: Ping the API
+    if: vars.API_PUBLIC_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      # Up to 90 seconds: if the instance was asleep anyway (a deploy, a
+      # skipped run), this request is the one that wakes it.
+      - name: Request the categories
+        run: |
+          curl --fail --silent --show-error --output /dev/null \
+            --max-time 90 --retry 2 --retry-delay 10 \
+            "${API_PUBLIC_URL%/}/api/v1/Categories"
+        env:
+          API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL }}
