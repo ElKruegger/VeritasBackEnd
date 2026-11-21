@@ -204,7 +204,7 @@ GET /api/v1/products?categoryId=...&sort=priceAsc&sizes=UK 8&sizes=UK 9&inStock=
 
 ## Security notes
 
-- Access and refresh tokens are delivered only as `httpOnly`, `Secure`, `SameSite=None` cookies; they never appear in a response body.
+- Access and refresh tokens are delivered only as `httpOnly`, `Secure`, `SameSite=Lax` cookies; they never appear in a response body. The storefront proxies `/api/*` to this API, so for the browser these are first-party cookies (cross-site cookies are blocked by Safari/iOS).
 - Refresh tokens are stored as SHA-256 hashes, rotated on every use, and reuse of a rotated token revokes every session of the account.
 - Authentication endpoints are rate-limited per client IP.
 - Row Level Security is enabled on every table so that Supabase's auto-generated Data API cannot read or write application data. Every migration that creates a table must also enable RLS on it.

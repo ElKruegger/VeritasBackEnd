@@ -141,8 +141,11 @@ try
     // --- CORS (brief section 9: "restricted to the deployed frontend origin only") ---
     // Origins come from two places, merged:
     //   - Cors:AllowedOrigins (array) in appsettings — dev defaults live in
-    //     appsettings.Development.json (Vite on https://localhost:5173);
+    //     appsettings.Development.json (the Next.js storefront on :3000);
     //   - FRONTEND_URL (brief section 10), comma-separated, set on Render.
+    // The storefront normally reaches the API through its /api/* proxy, which
+    // makes CORS moot for it; the same list is what OriginValidationMiddleware
+    // trusts, though, and that one does see the browser's Origin header.
     // AllowCredentials is required for the httpOnly auth cookies to travel
     // cross-origin, and the CORS spec forbids combining it with a wildcard
     // origin — hence an explicit list, never AllowAnyOrigin.
