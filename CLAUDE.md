@@ -8,7 +8,7 @@ Véritas is a portfolio-grade luxury menswear and lifestyle e-commerce platform 
 Stack: ASP.NET Core Web API on .NET 10 (this repo) · React + TypeScript + Vite + Tailwind + Zustand frontend (not started, separate repo) · PostgreSQL on Supabase · Supabase Storage for product images · Stripe Checkout (planned) · MailKit SMTP (planned) · Docker image deployed to Render · frontend on Vercel · GitHub Actions for CI/CD.
 
 ## Current state
-Done: catalog (brands, categories, products, variants, images) with filters, size/in-stock filter, sorting, filter facets, related products and paging · auth (register, login, refresh-token rotation with reuse detection, logout, me) in httpOnly cookies · roles (`Customer`/`Admin`) with an `AdminOnly` policy on every catalog write · FluentValidation · CORS · CSRF origin validation · rate limiting on auth · Serilog · RLS on every table · idempotent demo seed (27 products) · security headers + HSTS · account lockout (5 failures → 15 min) · login user-enumeration hardening · background purge of expired refresh tokens · 128 unit tests · CI workflow · Dockerfile + docker-compose · CD workflow (GHCR image → `--migrate` on Supabase → Render deploy hook), proven on main.
+Done: catalog (brands, categories, products, variants, images) with filters, size/in-stock filter, sorting, filter facets, related products and paging · auth (register, login, refresh-token rotation with reuse detection, logout, me) in httpOnly cookies · roles (`Customer`/`Admin`) with an `AdminOnly` policy on every catalog write · FluentValidation · CORS · CSRF origin validation · rate limiting on auth · Serilog · RLS on every table · idempotent demo seed (27 products) · security headers + HSTS · account lockout (5 failures → 15 min) · login user-enumeration hardening · background purge of expired refresh tokens · exact OpenAPI contract (strict numbers, enums by name, non-nullable properties required) consumed by the storefront's generated types · 135 unit tests · CI workflow · Dockerfile + docker-compose · CD workflow (GHCR image → `--migrate` on Supabase → Render deploy hook), proven on main.
 
 Not set up yet: the Render service and the `RENDER_DEPLOY_HOOK_URL` secret — until then the CD deploy job is skipped with a warning.
 
@@ -23,7 +23,7 @@ Open security backlog: least-privilege DB role (the API connects as `postgres`),
 - `LuxuryStore.Domain` — entities (`BaseEntity` gives Id/CreatedAt/UpdatedAt), enums. No packages.
 - `LuxuryStore.Application` — DTOs, `I*Service`/`I*Repository`/`IUnitOfWork` interfaces, services, `MappingExtensions` (hand-written, no AutoMapper), `Validation/` (FluentValidation). Never references Infrastructure or EF Core.
 - `LuxuryStore.Infrastructure` — `AppDbContext`, `Persistence/Configurations` (one `IEntityTypeConfiguration<T>` per entity), `Migrations/`, repositories + `UnitOfWork`, `Security/TokenService`, `Storage/ImageUrlResolver`, `Persistence/Seed/CatalogSeeder`.
-- `LuxuryStore-Backend` — controllers (thin, no try/catch), `Program.cs`, `Middleware/GlobalExceptionHandler`, `Middleware/OriginValidationMiddleware` (CSRF), `Filters/FluentValidationFilter`, `Authorization/Policies`.
+- `LuxuryStore-Backend` — controllers (thin, no try/catch), `Program.cs`, `Middleware/GlobalExceptionHandler`, `Middleware/OriginValidationMiddleware` (CSRF), `Filters/FluentValidationFilter`, `Authorization/Policies`, `Contract/` (JSON rules and OpenAPI transformers).
 - `LuxuryStore.UnitTests` — xUnit v3 + NSubstitute + Shouldly; folders mirror the layer under test. No database, no network.
 
 ## Commands (repo root)
@@ -61,6 +61,7 @@ A change is finished only when `dotnet build LuxuryStore-Backend.slnx` has 0 err
 - JWT uses short claim names (`sub`, `email`, `role`, `given_name`, `family_name`) with `MapInboundClaims = false`.
 - State-changing endpoints are protected by `OriginValidationMiddleware`; a webhook that must accept cross-site posts uses `[SkipOriginValidation]` and verifies its own signature.
 - Images: `ProductImages.Path` is a bucket object path or absolute https URL; `IImageUrlResolver` produces the public URL. Lowest `SortOrder` = primary image.
+- The OpenAPI document is the storefront's contract: the frontend generates its TypeScript types from it. Renaming or removing a DTO property, or making one nullable, is a breaking change for the frontend. JSON rules live in `Contract/ApiJson.cs` and apply to both serializer option sets (controllers and OpenAPI) — never configure one without the other.
 - Prices: `numeric(10,2)`, USD only. Server always recalculates totals — never trust client prices.
 - Package versions: shared `Microsoft.Extensions.*` floors are floating (`[10.0.12,)`) to avoid NU1605 downgrade errors. `System.Security.Cryptography.Xml`/`Pkcs` are pinned to `[10.0.13,)` for security fixes.
 - Every new business rule or bug fix comes with a unit test. Tests are named as sentences (`Reusing_an_already_rotated_token_revokes_every_session_of_the_user`) and pass `TestHelpers.Ct` to async calls.
