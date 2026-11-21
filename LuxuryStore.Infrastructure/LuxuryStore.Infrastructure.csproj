@@ -14,6 +14,13 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- The EF Core version the whole solution compiles against, stated here
+         instead of left to whatever Npgsql pulls in. EF Core Design (below)
+         must never be newer than this version: Design only flows to this project
+         (PrivateAssets), so a newer Design alone compiles Infrastructure
+         against a newer EF Core than the projects referencing it (CS1705).
+         Dependabot's "dotnet" group bumps them together. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.4" />
     <!-- Design-time tooling for `dotnet ef migrations add ...`. Lives here
          (next to AppDbContext) rather than in the API project, per the usual
          Clean Architecture convention. -->

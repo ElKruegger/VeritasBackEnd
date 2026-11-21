@@ -9,10 +9,29 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+
+    # The app targets .NET 10 (net10.0). Microsoft ships the .NET 11 packages
+    # alongside, and "System.* 11.0.0" next to "Microsoft.AspNetCore.* 10.0.x"
+    # mixes two runtimes. Patch updates (security fixes included) still
+    # arrive; moving to .NET 11 is a deliberate migration, not a bump.
+    ignore:
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Npgsql*"
+        update-types: ["version-update:semver-major"]
+
     groups:
-      # One PR for the whole Microsoft/.NET family instead of one per package.
-      microsoft:
-        patterns: ["Microsoft.*", "System.*"]
+      # The whole .NET family moves in one PR: the packages depend on each
+      # other's exact patch level (EF Core 10.0.15 needs Microsoft.Extensions.*
+      # 10.0.15, or restore fails with NU1605), so any subset fails CI.
+      dotnet:
+        patterns: ["Microsoft.*", "System.*", "Npgsql*"]
       test-tooling:
         patterns: ["xunit*", "NSubstitute*", "Shouldly", "coverlet*"]
 
@@ -21,3 +40,7 @@ updates:
     target-branch: developer
     schedule:
       interval: weekly
+    # All action bumps in one weekly PR instead of one PR per action.
+    groups:
+      actions:
+        patterns: ["*"]
