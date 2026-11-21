@@ -13,18 +13,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.4" />
     <!-- The EF Core version the whole solution compiles against, stated here
          instead of left to whatever Npgsql pulls in. EF Core Design (below)
          must never be newer than this version: Design only flows to this project
          (PrivateAssets), so a newer Design alone compiles Infrastructure
          against a newer EF Core than the projects referencing it (CS1705).
          Dependabot's "dotnet" group bumps them together. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
     <!-- Design-time tooling for `dotnet ef migrations add ...`. Lives here
          (next to AppDbContext) rather than in the API project, per the usual
          Clean Architecture convention. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -42,8 +42,8 @@
          version that needs raising — bump the floor here to match, don't
          just delete the pin, or the *next* restore fails with the same
          error for a different reason. -->
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="[10.0.12,)" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[10.0.12,)" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
     <!-- Security floors for transitive crypto packages (pulled in by the
          JwtBearer / EF Core chain). History: 10.0.10 fixed CVE-2026-50648
          (GHSA-23rf-6693-g89p); 10.0.13 (.NET October 2026 security update)
@@ -51,8 +51,8 @@
          and Pkcs GHSA-846f-f764-76mx / GHSA-2fmv-rv2c-59x7. When
          the vulnerable-package audit (dotnet list package, vulnerable + transitive) flags these
          again, raise both floors to the advisory's patched version. -->
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="[10.0.13,)" />
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="[10.0.13,)" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.15" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
     <!-- TokenService only uses this for JwtSecurityToken/JwtSecurityTokenHandler
          (a transitive dependency of this package, System.IdentityModel.Tokens.Jwt)
          and SigningCredentials/SymmetricSecurityKey (Microsoft.IdentityModel.Tokens,
@@ -60,7 +60,7 @@
          talking to Postgres is. The API project references the same package
          separately, to configure the JwtBearer *validation* middleware in
          Program.cs; that's a different concern living in a different project. -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
   </ItemGroup>
 
   <!-- Lets the unit tests check how internal query building is translated

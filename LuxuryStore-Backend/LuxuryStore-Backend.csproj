@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
     <!-- Test UI for the OpenAPI document Microsoft.AspNetCore.OpenApi already
          generates. .NET 10's template dropped Swagger UI by default (that's
          Swashbuckle, which the Microsoft docs steer people away from as of
@@ -21,7 +21,7 @@
          (AddAuthentication().AddJwtBearer(...)). LuxuryStore.Infrastructure
          references the same package separately, to *issue* tokens in
          TokenService — different concern, different project. -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
     <!-- Structured logging (brief section 3). AspNetCore brings
          Serilog.Extensions.Hosting (UseSerilog) and a console sink;
          Settings.Configuration adds ReadFrom.Configuration so the "Serilog"
@@ -48,7 +48,7 @@
          System.Security.Cryptography.Pkcs 9.0.0 through its MSBuild/Roslyn
          chain (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7). Same floor as
          LuxuryStore.Infrastructure — keep the two in sync. -->
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="[10.0.13,)" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
   </ItemGroup>
 
   <ItemGroup>
@@ -61,7 +61,7 @@
          Net result: this package has to be referenced directly in both
          places. Same version and asset restriction as Infrastructure's, so
          none of this tooling ships in the published API output. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
