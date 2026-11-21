@@ -184,9 +184,10 @@ try
         options.AddPolicy("auth", httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
                 // RemoteIpAddress is the real client IP only because
-                // UseForwardedHeaders runs first in the pipeline (see below);
-                // without it, every request on Render would share the
-                // proxy's IP and we'd be back to one global bucket.
+                // UseForwardedHeaders and StorefrontClientIpMiddleware run
+                // first in the pipeline (see below); without them, every
+                // request would share a proxy's IP and we'd be back to one
+                // global bucket.
                 partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 factory: _ => new FixedWindowRateLimiterOptions
                 {
@@ -275,6 +276,11 @@ try
     // Must be first: everything below (rate limiter partitioning, HTTPS
     // redirection, request logging) reads the client IP / scheme.
     app.UseForwardedHeaders();
+
+    // Then the visitor's IP as relayed by the storefront, if it proves it is
+    // the storefront (see Middleware/StorefrontClientIpMiddleware.cs).
+    app.UseMiddleware<StorefrontClientIpMiddleware>(
+        builder.Configuration["STOREFRONT_PROXY_SECRET"] ?? string.Empty);
 
     // Right after the forwarded headers, so every response — including the
     // error responses produced by UseExceptionHandler — carries them.
