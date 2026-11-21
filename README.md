@@ -148,7 +148,10 @@ Required reviewers can be added to the environment to make every production depl
 | `ConnectionStrings__DefaultConnection` | Same session-pooler connection string as above (the transaction pooler on port 6543 would require disabling Npgsql's prepared statements) |
 | `Jwt__SigningKey` | Random value, at least 32 bytes |
 | `FRONTEND_URL` | Deployed frontend origin(s), comma-separated |
+| `STOREFRONT_PROXY_SECRET` | Random value, at least 32 characters; the same value is set on the storefront (Vercel) |
 | `Storage__PublicBaseUrl` | Public URL of the `product-images` bucket |
+
+**Keeping it awake**: Render's free instances sleep after 15 minutes idle. The `Keep API warm` workflow requests the API every 10 minutes once the repository variable `API_PUBLIC_URL` (the Render URL) is set.
 
 ### Running it by hand
 
@@ -167,6 +170,7 @@ docker run --rm -e ConnectionStrings__DefaultConnection="..." veritas-api --migr
 | `Jwt:AccessTokenMinutes`, `Jwt:RefreshTokenDays` | — | Token lifetimes (default 15 minutes / 14 days) |
 | `Cors:AllowedOrigins` | `FRONTEND_URL` (comma-separated) | Origins allowed to call the API with credentials |
 | `Storage:PublicBaseUrl` | `Storage__PublicBaseUrl` | Public URL of the `product-images` bucket |
+| `STOREFRONT_PROXY_SECRET` | `STOREFRONT_PROXY_SECRET` | Shared with the storefront; proves a request was relayed by it, so the visitor IP it reports is used for rate limiting (secret, optional locally) |
 
 When `Storage:PublicBaseUrl` is empty, product images resolve to neutral placeholders that display each image's alt text, so the catalog renders before real photography is uploaded.
 
@@ -204,9 +208,9 @@ GET /api/v1/products?categoryId=...&sort=priceAsc&sizes=UK 8&sizes=UK 9&inStock=
 
 ## Security notes
 
-- Access and refresh tokens are delivered only as `httpOnly`, `Secure`, `SameSite=None` cookies; they never appear in a response body.
+- Access and refresh tokens are delivered only as `httpOnly`, `Secure`, `SameSite=Lax` cookies; they never appear in a response body. The storefront proxies `/api/*` to this API, so for the browser these are first-party cookies (cross-site cookies are blocked by Safari/iOS).
 - Refresh tokens are stored as SHA-256 hashes, rotated on every use, and reuse of a rotated token revokes every session of the account.
-- Authentication endpoints are rate-limited per client IP.
+- Authentication endpoints are rate-limited per client IP. Behind the storefront's relay, the visitor's IP comes from a header the API only believes when it carries the shared `STOREFRONT_PROXY_SECRET`, so a client calling the API directly cannot choose its own rate-limit bucket.
 - Row Level Security is enabled on every table so that Supabase's auto-generated Data API cannot read or write application data. Every migration that creates a table must also enable RLS on it.
 - CORS is restricted to the configured frontend origins.
 - After 5 consecutive wrong passwords an account is locked for 15 minutes. The lock is temporary on purpose, so nobody can lock a customer out permanently.

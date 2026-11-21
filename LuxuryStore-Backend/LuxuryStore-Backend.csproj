@@ -32,6 +32,12 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
   </ItemGroup>
 
+  <!-- Lets the unit tests check internal helpers such as AuthCookies
+       without making them part of the API project's public surface. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="LuxuryStore.UnitTests" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\LuxuryStore.Application\LuxuryStore.Application.csproj" />
     <ProjectReference Include="..\LuxuryStore.Infrastructure\LuxuryStore.Infrastructure.csproj" />

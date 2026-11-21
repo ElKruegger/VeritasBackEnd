@@ -3,11 +3,16 @@ namespace LuxuryStore_Backend.Middleware;
 /// <summary>
 /// CSRF defense for cookie-authenticated, state-changing requests.
 ///
-/// Why it's needed: the auth cookies are SameSite=None (the Vercel frontend
-/// and the Render API are different sites), so the browser attaches them to
-/// cross-site requests too. CORS doesn't stop that — it only hides the
-/// response from the attacker's script; a cross-site form POST or
+/// Why it's needed even with SameSite=Lax cookies: Lax is a browser rule,
+/// not a guarantee. It treats every subdomain of the same domain as
+/// "same-site" (once on a custom domain, a page on blog.example.com may post
+/// to shop.example.com), and older browsers ignore it. CORS doesn't help either: it only
+/// hides the response from the attacker's script; a form POST or
 /// no-preflight fetch still reaches the endpoint and still runs.
+///
+/// Behind the storefront's /api/* proxy the Origin header is forwarded
+/// unchanged, so the storefront's origin (http://localhost:3000 locally,
+/// FRONTEND_URL in production) must be in Cors:AllowedOrigins.
 ///
 /// What it does (OWASP "verify origin with standard headers"): for POST,
 /// PUT, PATCH and DELETE, the browser-supplied Origin header (or, if absent,
