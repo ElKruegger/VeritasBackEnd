@@ -16,7 +16,7 @@
          Swashbuckle, which the Microsoft docs steer people away from as of
          .NET 9+) — Scalar is the current recommended replacement and its UI
          matches the project's dark/minimalist visual identity. -->
-    <PackageReference Include="Scalar.AspNetCore" Version="3.0.1" />
+    <PackageReference Include="Scalar.AspNetCore" Version="3.2.0" />
     <!-- Configures the JWT Bearer *validation* middleware in Program.cs
          (AddAuthentication().AddJwtBearer(...)). LuxuryStore.Infrastructure
          references the same package separately, to *issue* tokens in
